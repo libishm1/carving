@@ -143,23 +143,64 @@ function App() {
     };
   }, [effectiveStock, carvingNormal]);
 
-  // Recalculate Pointing Raycast
-  const recalculatePointing = () => {
-    if (!selectedMaquettePoint || !blockMeshRef) return;
+  // Unified Snapping Logic
+  const updateSnapping = (maquettePt: THREE.Vector3, meshRefToUse: THREE.Object3D | null) => {
+    if (!meshRefToUse) return;
     
-    const raycaster = new THREE.Raycaster();
-    const dir = carvingNormal.clone().normalize();
-    raycaster.set(selectedMaquettePoint, dir);
-    
-    const hits = raycaster.intersectObject(blockMeshRef, true);
-    
-    if (hits.length > 0) {
-      setSelectedBlockPoint(hits[0].point);
-      setDrillDepth(hits[0].distance);
+    if (isCarvingMode) {
+      const raycaster = new THREE.Raycaster();
+      const dir = carvingNormal.clone().normalize();
+      raycaster.set(maquettePt, dir);
+      
+      const hits = raycaster.intersectObject(meshRefToUse, true);
+      
+      if (hits.length > 0) {
+        setSelectedBlockPoint(hits[0].point);
+        setDrillDepth(hits[0].distance);
+      }
+    } else {
+      let closestPointWorld = maquettePt.clone();
+      let minDistance = Infinity;
+  
+      meshRefToUse.traverse((child: any) => {
+        if (child instanceof THREE.Mesh && child.geometry.boundsTree) {
+          const inverseMatrix = new THREE.Matrix4().copy(child.matrixWorld).invert();
+          const localPoint = maquettePt.clone().applyMatrix4(inverseMatrix);
+          
+          const res = child.geometry.boundsTree.closestPointToPoint(localPoint, {});
+          if (res && res.point) {
+            const worldPt = res.point.clone().applyMatrix4(child.matrixWorld);
+            const dist = worldPt.distanceTo(maquettePt);
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestPointWorld = worldPt;
+            }
+          }
+        }
+      });
+      
+      if (minDistance !== Infinity) {
+        setSelectedBlockPoint(closestPointWorld);
+        setDrillDepth(minDistance);
+      }
     }
   };
 
-  // Snapping Logic
+  // Recalculate Pointing Raycast when TweenMesh updates
+  const recalculatePointing = () => {
+    if (selectedMaquettePoint) {
+      updateSnapping(selectedMaquettePoint, blockMeshRef);
+    }
+  };
+
+  // When Carving Mode or BlockMeshRef toggles, auto-refresh the point!
+  useEffect(() => {
+    if (selectedMaquettePoint) {
+      updateSnapping(selectedMaquettePoint, blockMeshRef);
+    }
+  }, [isCarvingMode, blockMeshRef, carvingNormal]);
+
+  // Handle Maquette Clicks
   const handleMaquetteClick = (maquettePoint: THREE.Vector3, normal?: THREE.Vector3) => {
     if (isSelectingFace && normal) {
       setCarvingNormal(normal);
@@ -168,19 +209,7 @@ function App() {
     }
 
     setSelectedMaquettePoint(maquettePoint);
-    
-    if (!blockMeshRef) return;
-    
-    const raycaster = new THREE.Raycaster();
-    const dir = carvingNormal.clone().normalize();
-    raycaster.set(maquettePoint, dir);
-    
-    const hits = raycaster.intersectObject(blockMeshRef, true);
-    
-    if (hits.length > 0) {
-      setSelectedBlockPoint(hits[0].point);
-      setDrillDepth(hits[0].distance);
-    }
+    updateSnapping(maquettePoint, blockMeshRef);
   };
 
   return (
