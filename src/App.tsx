@@ -2,6 +2,7 @@ import { useState, useMemo, Suspense, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Grid } from '@react-three/drei';
 import { Model } from './components/ModelLoader';
+import { TweenMesh } from './components/TweenMesh';
 import { Settings2, Maximize, BoxSelect } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -41,8 +42,12 @@ function App() {
   const [carvingNormal, setCarvingNormal] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
   const [isSelectingFace, setIsSelectingFace] = useState<boolean>(false);
 
+  const [tweenValue, setTweenValue] = useState<number>(0);
+
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
+  const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
   const [blockMeshRef, setBlockMeshRef] = useState<THREE.Object3D | null>(null);
+  const dynamicBlockRef = useRef<THREE.Object3D | null>(null);
   const [selectedMaquettePoint, setSelectedMaquettePoint] = useState<THREE.Vector3 | null>(null);
   const [selectedBlockPoint, setSelectedBlockPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
@@ -51,6 +56,13 @@ function App() {
   const handleSculptureLoaded = (_box: THREE.Box3, size: [number, number, number]) => {
     setSculptureSize(size);
   };
+
+  // Revert raycaster to standard bounding block when Carving Mode is toggled off
+  useEffect(() => {
+    if (!isCarvingMode && dynamicBlockRef.current) {
+      setBlockMeshRef(dynamicBlockRef.current);
+    }
+  }, [isCarvingMode]);
 
   // Calculate scaling and fit
   const { scaleFactors, fitResult, currentSize, effectiveStock } = useMemo(() => {
@@ -119,22 +131,19 @@ function App() {
     return { scaleFactors: factors, fitResult: fit, currentSize: scaledExtents, effectiveStock: stock };
   }, [sculptureSize, customStockSize, stockMode, mode, value, margin]);
 
-  // Carving Simulation Clipping Plane
-  const { clippingPlanes, maxCarvingDepth } = useMemo(() => {
+  // Carving Simulation Max Depth
+  const { maxCarvingDepth } = useMemo(() => {
     const hx = effectiveStock[0] / 2;
     const hy = effectiveStock[1] / 2;
     const hz = effectiveStock[2] / 2;
     
     // Find the extremum of the block in the direction of the carving normal
     const maxProj = Math.abs(carvingNormal.x) * hx + Math.abs(carvingNormal.y) * hy + Math.abs(carvingNormal.z) * hz;
-    const constant = maxProj - carvingDepth;
-    const planeNormal = carvingNormal.clone().multiplyScalar(-1);
     
     return {
-      clippingPlanes: [new THREE.Plane(planeNormal, constant)],
       maxCarvingDepth: maxProj * 2
     };
-  }, [effectiveStock, carvingNormal, carvingDepth]);
+  }, [effectiveStock, carvingNormal]);
 
   // Snapping Logic
   const handleMaquetteClick = (maquettePoint: THREE.Vector3, normal?: THREE.Vector3) => {
@@ -192,29 +201,41 @@ function App() {
             <Suspense fallback={null}>
               <DynamicBlock 
                 size={effectiveStock} 
-                onLoaded={(_box, _size, root) => setBlockMeshRef(root)} 
+                onLoaded={(_box, _size, root) => {
+                  dynamicBlockRef.current = root;
+                  if (!isCarvingMode) setBlockMeshRef(root);
+                }} 
               />
               
-              {/* The Real Mesh (Always visible, unclipped) */}
+              {/* The Real Mesh (Always visible) */}
               <Model 
                 url="/models/01_maquette_reduced.stl" 
                 color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
                 scale={scaleFactors}
                 clippingPlanes={[]}
                 polygonOffset={true}
-                polygonOffsetFactor={1}
-                polygonOffsetUnits={1}
-                onLoaded={handleSculptureLoaded}
+                polygonOffsetFactor={2}
+                polygonOffsetUnits={2}
+                onLoaded={(_box, _size, root) => {
+                  handleSculptureLoaded(_box, _size);
+                  if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
+                  else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
+                }}
                 onPointerClick={handleMaquetteClick}
               />
 
-              {/* The Carved Mesh (Clipped shell) */}
-              {isCarvingMode && (
-                <Model 
-                  url="/models/01_maquette_reduced.stl" 
-                  color="#e0e0e0" 
-                  scale={scaleFactors}
-                  clippingPlanes={clippingPlanes}
+              {/* The Tween Simulation Mesh */}
+              {isCarvingMode && maquetteMeshRef && (
+                <TweenMesh
+                  stockSize={effectiveStock}
+                  scaleFactors={scaleFactors}
+                  carvingNormal={carvingNormal}
+                  maquetteMesh={maquetteMeshRef}
+                  tweenValue={tweenValue}
+                  onLoaded={(mesh) => {
+                    // Update raycaster to snap dynamically to this surface!
+                    setBlockMeshRef(mesh);
+                  }}
                 />
               )}
             </Suspense>
@@ -393,6 +414,27 @@ function App() {
                 />
                 <div className="text-right text-xs font-mono text-gray-300 mt-1">
                   Depth: {carvingDepth.toFixed(2)} / {maxCarvingDepth.toFixed(2)} units
+                </div>
+
+                <div className="mt-6">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">
+                      Roughing Stage (Tween)
+                    </label>
+                    <span className="text-xs font-mono">{Math.round(tweenValue * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={tweenValue}
+                    onChange={(e) => setTweenValue(Number(e.target.value))}
+                    className="w-full mt-2"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    0% = Raw Block Face. 100% = Final Mesh. The pointing device dynamically snaps to this simulated roughing surface!
+                  </p>
                 </div>
               </>
             )}
