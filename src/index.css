@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@layer base {
+  body {
+    @apply bg-dark-900 text-white font-sans antialiased overflow-hidden;
+  }
+}
+
+/* Hide scrollbar for a native app feel */
+::-webkit-scrollbar {
+  display: none;
+}
