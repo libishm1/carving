@@ -37,7 +37,7 @@ function App() {
   const [stockMode, setStockMode] = useState<'custom' | 'auto'>('auto');
   const [customStockSize, setCustomStockSize] = useState<[number, number, number]>([1.2, 1.0, 2.2]);
   
-  const [isCarvingMode, setIsCarvingMode] = useState<boolean>(false);
+  const [isCarvingMode, setIsCarvingMode] = useState<boolean>(true);
   const [carvingDepth, setCarvingDepth] = useState<number>(0);
   const [carvingNormal, setCarvingNormal] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
   const [isSelectingFace, setIsSelectingFace] = useState<boolean>(false);
