@@ -1,6 +1,6 @@
 import { useState, useMemo, Suspense, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Grid } from '@react-three/drei';
+import { OrbitControls, Environment, ContactShadows, Grid, Html } from '@react-three/drei';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
 import { Settings2, Maximize, BoxSelect } from 'lucide-react';
@@ -41,8 +41,6 @@ function App() {
   const [carvingDepth, setCarvingDepth] = useState<number>(0);
   const [carvingNormal, setCarvingNormal] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
   const [isSelectingFace, setIsSelectingFace] = useState<boolean>(false);
-
-  const [tweenValue, setTweenValue] = useState<number>(0);
 
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
@@ -145,46 +143,44 @@ function App() {
     };
   }, [effectiveStock, carvingNormal]);
 
+  // Recalculate Pointing Raycast
+  const recalculatePointing = () => {
+    if (!selectedMaquettePoint || !blockMeshRef) return;
+    
+    const raycaster = new THREE.Raycaster();
+    const dir = carvingNormal.clone().normalize();
+    raycaster.set(selectedMaquettePoint, dir);
+    
+    const hits = raycaster.intersectObject(blockMeshRef, true);
+    
+    if (hits.length > 0) {
+      setSelectedBlockPoint(hits[0].point);
+      setDrillDepth(hits[0].distance);
+    }
+  };
+
   // Snapping Logic
   const handleMaquetteClick = (maquettePoint: THREE.Vector3, normal?: THREE.Vector3) => {
-    if (isSelectingFace) {
-      if (normal) {
-        setCarvingNormal(normal);
-        setCarvingDepth(0); // Reset slider when direction changes
-      }
+    if (isSelectingFace && normal) {
+      setCarvingNormal(normal);
       setIsSelectingFace(false);
       return;
     }
 
-    if (!blockMeshRef) {
-      setSelectedMaquettePoint(maquettePoint);
-      setDrillDepth(null);
-      return;
-    }
-
-    let closestPointWorld = maquettePoint.clone();
-    let minDistance = Infinity;
-
-    blockMeshRef.traverse((child: any) => {
-      if (child instanceof THREE.Mesh && child.geometry.boundsTree) {
-        const inverseMatrix = new THREE.Matrix4().copy(child.matrixWorld).invert();
-        const localPoint = maquettePoint.clone().applyMatrix4(inverseMatrix);
-        
-        const res = child.geometry.boundsTree.closestPointToPoint(localPoint, {});
-        if (res && res.point) {
-          const worldPt = res.point.clone().applyMatrix4(child.matrixWorld);
-          const dist = worldPt.distanceTo(maquettePoint);
-          if (dist < minDistance) {
-            minDistance = dist;
-            closestPointWorld = worldPt;
-          }
-        }
-      }
-    });
-
     setSelectedMaquettePoint(maquettePoint);
-    setSelectedBlockPoint(closestPointWorld);
-    setDrillDepth(minDistance !== Infinity ? minDistance : null);
+    
+    if (!blockMeshRef) return;
+    
+    const raycaster = new THREE.Raycaster();
+    const dir = carvingNormal.clone().normalize();
+    raycaster.set(maquettePoint, dir);
+    
+    const hits = raycaster.intersectObject(blockMeshRef, true);
+    
+    if (hits.length > 0) {
+      setSelectedBlockPoint(hits[0].point);
+      setDrillDepth(hits[0].distance);
+    }
   };
 
   return (
@@ -231,10 +227,14 @@ function App() {
                   scaleFactors={scaleFactors}
                   carvingNormal={carvingNormal}
                   maquetteMesh={maquetteMeshRef}
-                  tweenValue={tweenValue}
+                  tweenValue={maxCarvingDepth > 0 ? (carvingDepth / maxCarvingDepth) : 0}
                   onLoaded={(mesh) => {
                     // Update raycaster to snap dynamically to this surface!
                     setBlockMeshRef(mesh);
+                  }}
+                  onUpdate={() => {
+                    // Recalculate the pointing device drill depth in real-time as the slider moves!
+                    recalculatePointing();
                   }}
                 />
               )}
@@ -251,6 +251,13 @@ function App() {
             <mesh position={selectedBlockPoint}>
               <sphereGeometry args={[0.03, 16, 16]} />
               <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.5} />
+              {drillDepth !== null && (
+                <Html position={[0, 0.1, 0]} center zIndexRange={[100, 0]} className="pointer-events-none">
+                  <div className="bg-dark-900/90 border border-red-500/50 text-red-400 font-mono text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap backdrop-blur-md">
+                    Depth: {drillDepth.toFixed(2)} mm
+                  </div>
+                </Html>
+              )}
             </mesh>
           )}
           {selectedMaquettePoint && selectedBlockPoint && (
@@ -415,27 +422,9 @@ function App() {
                 <div className="text-right text-xs font-mono text-gray-300 mt-1">
                   Depth: {carvingDepth.toFixed(2)} / {maxCarvingDepth.toFixed(2)} units
                 </div>
-
-                <div className="mt-6">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">
-                      Roughing Stage (Tween)
-                    </label>
-                    <span className="text-xs font-mono">{Math.round(tweenValue * 100)}%</span>
-                  </div>
-                  <input 
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={tweenValue}
-                    onChange={(e) => setTweenValue(Number(e.target.value))}
-                    className="w-full mt-2"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    0% = Raw Block Face. 100% = Final Mesh. The pointing device dynamically snaps to this simulated roughing surface!
-                  </p>
-                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  The pointing device dynamically snaps to this simulated roughing surface in real-time!
+                </p>
               </>
             )}
           </div>

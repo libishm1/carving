@@ -8,6 +8,7 @@ interface TweenMeshProps {
   maquetteMesh: THREE.Mesh | null;
   tweenValue: number;
   onLoaded: (mesh: THREE.Mesh) => void;
+  onUpdate?: () => void;
 }
 
 export const TweenMesh = ({
@@ -16,7 +17,8 @@ export const TweenMesh = ({
   carvingNormal,
   maquetteMesh,
   tweenValue,
-  onLoaded
+  onLoaded,
+  onUpdate
 }: TweenMeshProps) => {
   const meshRef = useRef<THREE.Mesh>(null);
   
@@ -108,7 +110,9 @@ export const TweenMesh = ({
         baseGeometry.computeBoundsTree(); 
     }
     
-  }, [baseGeometry, maxDistances, tweenValue, carvingNormal]);
+    if (onUpdate) onUpdate();
+    
+  }, [baseGeometry, maxDistances, tweenValue, carvingNormal, onUpdate]);
 
   if (!baseGeometry) return null;
 
