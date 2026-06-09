@@ -5,7 +5,7 @@ import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
 import { ARController } from './components/ARController';
-import { Settings2, Maximize, BoxSelect, Menu, X } from 'lucide-react';
+import { Settings2, Maximize, BoxSelect, Menu, X, Upload } from 'lucide-react';
 import * as THREE from 'three';
 
 export const store = createXRStore();
@@ -47,6 +47,8 @@ function App() {
   const [isSelectingFace, setIsSelectingFace] = useState<boolean>(false);
   const [modelPosition, setModelPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, -1, 0));
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [modelUrl, setModelUrl] = useState<string>(`${import.meta.env.BASE_URL}models/01_maquette_reduced.stl`);
+  const [modelExt, setModelExt] = useState<string>('stl');
 
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
@@ -59,6 +61,22 @@ function App() {
   // Handle Model Loading
   const handleSculptureLoaded = (_box: THREE.Box3, size: [number, number, number]) => {
     setSculptureSize(size);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext) setModelExt(ext);
+      
+      const newUrl = URL.createObjectURL(file);
+      if (modelUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(modelUrl);
+      }
+      setModelUrl(newUrl);
+      // Reset carving depth when loading a new model
+      setCarvingDepth(0);
+    }
   };
 
   // Revert raycaster to standard bounding block when Carving Mode is toggled off
@@ -294,7 +312,8 @@ function App() {
               
               {/* The Real Mesh (Always visible) */}
               <Model 
-                url={`${import.meta.env.BASE_URL}models/01_maquette_reduced.stl`} 
+                url={modelUrl} 
+                extension={modelExt}
                 color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
                 scale={scaleFactors}
                 clippingPlanes={[]}
@@ -364,6 +383,18 @@ function App() {
       <div className={`absolute md:relative right-0 top-0 h-full w-80 max-w-[85vw] bg-dark-800 border-l border-dark-600 shadow-2xl z-40 flex flex-col transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
         <div className="p-6 overflow-y-auto flex-1">
           
+          {/* Upload Section */}
+          <div className="mb-6 pb-6 border-b border-dark-600">
+            <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-dark-600 rounded-xl cursor-pointer hover:border-primary-500 hover:bg-dark-700/50 transition-colors group">
+              <input type="file" accept=".stl,.obj,.3dm" className="hidden" onChange={handleFileUpload} />
+              <div className="flex flex-col items-center">
+                <Upload className="w-6 h-6 text-gray-400 group-hover:text-primary-400 mb-2" />
+                <span className="text-sm font-bold text-gray-300">Upload 3D Model</span>
+                <span className="text-xs text-gray-500 mt-1">.stl, .obj, .3dm</span>
+              </div>
+            </label>
+          </div>
+
           {/* Fit Report moved into Sidebar */}
           {fitResult && (
             <div className="mb-6 pb-6 border-b border-dark-600">

@@ -7,6 +7,7 @@ import * as THREE from 'three';
 
 export interface ModelProps {
   url: string;
+  extension?: string;
   color?: string;
   wireframe?: boolean;
   opacity?: number;
@@ -121,7 +122,7 @@ function ModelSTL(props: ModelProps) {
 }
 
 export function Model(props: ModelProps) {
-  const ext = props.url.split('.').pop()?.toLowerCase();
+  const ext = props.extension?.toLowerCase() || props.url.split('.').pop()?.toLowerCase();
   
   if (ext === 'obj') return <ModelOBJ {...props} />;
   if (ext === 'stl') return <ModelSTL {...props} />;
