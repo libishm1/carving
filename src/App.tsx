@@ -5,7 +5,7 @@ import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
 import { ARController } from './components/ARController';
-import { Settings2, Maximize, BoxSelect } from 'lucide-react';
+import { Settings2, Maximize, BoxSelect, Menu, X } from 'lucide-react';
 import * as THREE from 'three';
 
 export const store = createXRStore();
@@ -46,6 +46,7 @@ function App() {
   const [carvingNormal, setCarvingNormal] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
   const [isSelectingFace, setIsSelectingFace] = useState<boolean>(false);
   const [modelPosition, setModelPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, -1, 0));
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
@@ -218,8 +219,27 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-dark-900 text-gray-100 overflow-hidden">
-      <div className="flex-1 relative">
+    <div className="flex h-screen w-full bg-dark-900 text-gray-100 overflow-hidden relative">
+      <div className="flex-1 relative w-full h-full">
+        {/* Mobile Sidebar Toggle Button */}
+        <button 
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="md:hidden absolute top-4 right-4 z-50 bg-dark-800 p-3 rounded-full shadow-xl border border-dark-600 text-white"
+        >
+          {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+
+        {/* Massive Depth HUD */}
+        {drillDepth !== null && (
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
+            <div className="bg-dark-900/90 border-2 border-primary-500/50 backdrop-blur-xl px-8 py-4 rounded-3xl shadow-2xl text-center">
+              <div className="text-sm md:text-base text-primary-400 font-bold uppercase tracking-widest mb-1">Drill Depth</div>
+              <div className="text-5xl md:text-7xl font-mono font-bold text-white tracking-tight">
+                {drillDepth.toFixed(2)} <span className="text-2xl md:text-3xl text-gray-400">mm</span>
+              </div>
+            </div>
+          </div>
+        )}
         <button
           onClick={() => store.enterAR()}
           className="absolute bottom-4 left-4 z-50 bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center gap-2 transition-colors"
@@ -287,21 +307,6 @@ function App() {
                 />
               )}
             </Suspense>
-            
-            {/* Depth Metric at the Corner of the Object */}
-            {drillDepth !== null && selectedBlockPoint && (
-              <Html 
-                position={[effectiveStock[0] / 2 + 0.05, effectiveStock[1] / 2 + 0.05, effectiveStock[2] / 2 + 0.05]} 
-                center 
-                zIndexRange={[100, 0]} 
-                className="pointer-events-none"
-              >
-                <div className="bg-dark-900/90 border border-red-500/50 text-red-400 font-mono text-sm px-3 py-2 rounded-lg shadow-2xl whitespace-nowrap backdrop-blur-md">
-                  Depth: {drillDepth.toFixed(2)} mm
-                </div>
-              </Html>
-            )}
-
             <ContactShadows resolution={512} scale={10} blur={2} opacity={0.5} far={10} color="#000000" />
           </group>
           {selectedMaquettePoint && (
@@ -332,73 +337,44 @@ function App() {
           )}
           </XR>
         </Canvas>
-
-        {fitResult && (
-          <div className="absolute top-6 right-6 bg-dark-800/80 backdrop-blur-md p-4 rounded-xl border border-dark-600 shadow-2xl max-w-sm">
-            <h3 className="text-lg font-bold flex items-center mb-2">
-              <BoxSelect className="w-5 h-5 mr-2 text-primary-500" />
-              Fit Report
-            </h3>
-            <div className={`text-xl font-bold mb-3 ${fitResult.fits ? 'text-green-400' : 'text-red-400'}`}>
-              {fitResult.fits ? '✓ FITS IN BLOCK' : '✗ DOES NOT FIT'}
-            </div>
-            <div className="space-y-3 mt-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Target Size:</span>
-                <span className="font-mono text-gray-200">
-                  {currentSize[0].toFixed(2)} x {currentSize[1].toFixed(2)} x {currentSize[2].toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Block Size:</span>
-                <span className="font-mono text-gray-200">
-                  {effectiveStock[0].toFixed(2)} x {effectiveStock[1].toFixed(2)} x {effectiveStock[2].toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Clearance (sorted):</span>
-                <span className={`font-mono ${fitResult.fits ? 'text-green-400' : 'text-red-400'}`}>
-                  {fitResult.clearance.map(c => c.toFixed(2)).join(', ')}
-                </span>
-              </div>
-              {!fitResult.fits && (
-                <div className="pt-2 mt-2 border-t border-dark-600">
-                  <span className="text-xs text-red-400 font-bold">Max scale to fit: {fitResult.maxScaleToFit.toFixed(3)}x</span>
-                </div>
-              )}
-            </div>
-            {selectedBlockPoint && selectedMaquettePoint && (
-              <div className="mt-4 pt-4 border-t border-dark-600">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-bold text-gray-400 uppercase">Marker (Outer Block)</h4>
-                  {drillDepth !== null && (
-                    <span className="text-xs font-bold px-2 py-1 bg-primary-500/20 text-primary-400 rounded">
-                      Depth: {drillDepth.toFixed(2)} mm
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-dark-700 rounded p-2 border border-dark-600">
-                    <span className="block text-xs text-red-400 font-bold mb-1">X</span>
-                    <span className="font-mono text-sm">{selectedBlockPoint.x.toFixed(2)}</span>
-                  </div>
-                  <div className="bg-dark-700 rounded p-2 border border-dark-600">
-                    <span className="block text-xs text-green-400 font-bold mb-1">Y</span>
-                    <span className="font-mono text-sm">{selectedBlockPoint.y.toFixed(2)}</span>
-                  </div>
-                  <div className="bg-dark-700 rounded p-2 border border-dark-600">
-                    <span className="block text-xs text-blue-400 font-bold mb-1">Z</span>
-                    <span className="font-mono text-sm">{selectedBlockPoint.z.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      <div className="w-80 bg-dark-800 border-l border-dark-600 shadow-2xl z-10 flex flex-col">
+      {/* Sidebar Overlay/Drawer */}
+      <div className={`absolute md:relative right-0 top-0 h-full w-80 max-w-[85vw] bg-dark-800 border-l border-dark-600 shadow-2xl z-40 flex flex-col transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
         <div className="p-6 overflow-y-auto flex-1">
+          
+          {/* Fit Report moved into Sidebar */}
+          {fitResult && (
+            <div className="mb-6 pb-6 border-b border-dark-600">
+              <h3 className="text-lg font-bold flex items-center mb-2">
+                <BoxSelect className="w-5 h-5 mr-2 text-primary-500" />
+                Fit Report
+              </h3>
+              <div className={`text-xl font-bold mb-3 ${fitResult.fits ? 'text-green-400' : 'text-red-400'}`}>
+                {fitResult.fits ? '✓ FITS IN BLOCK' : '✗ DOES NOT FIT'}
+              </div>
+              <div className="space-y-3 mt-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Target Size:</span>
+                  <span className="font-mono text-gray-200">
+                    {currentSize[0].toFixed(2)} x {currentSize[1].toFixed(2)} x {currentSize[2].toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Block Size:</span>
+                  <span className="font-mono text-gray-200">
+                    {effectiveStock[0].toFixed(2)} x {effectiveStock[1].toFixed(2)} x {effectiveStock[2].toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Clearance:</span>
+                  <span className={`font-mono ${fitResult.fits ? 'text-green-400' : 'text-red-400'}`}>
+                    {fitResult.clearance.map(c => c.toFixed(2)).join(', ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="mb-6 pb-6 border-b border-dark-600">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Stock Block</span>
