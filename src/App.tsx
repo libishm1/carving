@@ -224,7 +224,7 @@ function App() {
         {/* Mobile Sidebar Toggle Button */}
         <button 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="md:hidden absolute top-4 right-4 z-50 bg-dark-800 p-3 rounded-full shadow-xl border border-dark-600 text-white"
+          className="md:hidden absolute bottom-4 right-4 z-50 bg-dark-800 p-4 rounded-full shadow-xl border border-dark-600 text-white w-14 h-14 flex items-center justify-center"
         >
           {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -240,9 +240,30 @@ function App() {
             </div>
           </div>
         )}
+        {/* Prominent Carving Slider */}
+        {isCarvingMode && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-md bg-dark-900/90 border border-dark-600 backdrop-blur-xl p-4 rounded-2xl shadow-2xl">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-bold text-gray-300">Carving Depth</span>
+              <span className="text-xs font-mono text-primary-400 bg-primary-500/10 px-2 py-1 rounded">
+                {carvingDepth.toFixed(2)} / {maxCarvingDepth.toFixed(2)}
+              </span>
+            </div>
+            <input 
+              type="range"
+              min="0"
+              max={maxCarvingDepth}
+              step="0.01"
+              value={carvingDepth}
+              onChange={(e) => setCarvingDepth(Number(e.target.value))}
+              className="w-full h-2 bg-dark-600 rounded-lg appearance-none cursor-pointer accent-primary-500"
+            />
+          </div>
+        )}
+
         <button
           onClick={() => store.enterAR()}
-          className="absolute bottom-4 left-4 z-50 bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center gap-2 transition-colors"
+          className="absolute bottom-4 left-4 z-50 bg-primary-600 hover:bg-primary-500 text-white font-bold h-14 px-6 rounded-full shadow-lg flex items-center gap-2 transition-colors"
         >
           <BoxSelect className="w-5 h-5" />
           Enter AR
@@ -261,7 +282,7 @@ function App() {
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
-          <group position={modelPosition}>
+          <group position={[modelPosition.x, modelPosition.y + (effectiveStock[1] / 2), modelPosition.z]}>
             <Suspense fallback={null}>
               <DynamicBlock 
                 size={effectiveStock} 
@@ -439,24 +460,12 @@ function App() {
               <>
                 <button 
                   onClick={() => setIsSelectingFace(!isSelectingFace)}
-                  className={`w-full p-2 text-xs font-bold rounded flex items-center justify-center mb-4 transition-colors ${isSelectingFace ? 'bg-primary-500 text-white animate-pulse' : 'bg-dark-700 text-gray-300 hover:bg-dark-600'}`}
+                  className={`w-full p-3 h-12 text-sm font-bold rounded-lg flex items-center justify-center mb-2 transition-colors ${isSelectingFace ? 'bg-primary-500 text-white animate-pulse' : 'bg-dark-700 text-gray-300 hover:bg-dark-600'}`}
                 >
                   {isSelectingFace ? 'Select Face on Mesh...' : 'Set Carving Direction'}
                 </button>
-                <input 
-                  type="range"
-                  min="0"
-                  max={maxCarvingDepth}
-                  step="0.01"
-                  value={carvingDepth}
-                  onChange={(e) => setCarvingDepth(Number(e.target.value))}
-                  className="w-full"
-                />
-                <div className="text-right text-xs font-mono text-gray-300 mt-1">
-                  Depth: {carvingDepth.toFixed(2)} / {maxCarvingDepth.toFixed(2)} units
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  The pointing device dynamically snaps to this simulated roughing surface in real-time!
+                <p className="text-xs text-gray-500 text-center">
+                  Adjust carving depth using the main slider.
                 </p>
               </>
             )}
