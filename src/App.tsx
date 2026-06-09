@@ -51,6 +51,11 @@ function App() {
   const [modelUrl, setModelUrl] = useState<string>(`${import.meta.env.BASE_URL}models/01_maquette_reduced.stl`);
   const [modelExt, setModelExt] = useState<string>('stl');
 
+  // Multi-touch AR Gestures
+  const [arScale, setArScale] = useState<number>(1);
+  const [arRotation, setArRotation] = useState<number>(0);
+  const touchState = useRef({ distance: 0, angle: 0, initialScale: 1, initialRotation: 0 });
+
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
   const [blockMeshRef, setBlockMeshRef] = useState<THREE.Object3D | null>(null);
@@ -237,8 +242,41 @@ function App() {
     updateSnapping(maquettePoint, blockMeshRef);
   };
 
+  // Touch Gesture Handlers for Pinch/Twist
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchState.current.distance = Math.hypot(dx, dy);
+      touchState.current.angle = Math.atan2(dy, dx);
+      touchState.current.initialScale = arScale;
+      touchState.current.initialRotation = arRotation;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      
+      if (touchState.current.distance > 0) {
+        const scaleFactor = dist / touchState.current.distance;
+        setArScale(Math.max(0.1, touchState.current.initialScale * scaleFactor));
+      }
+
+      const angleDelta = angle - touchState.current.angle;
+      setArRotation(touchState.current.initialRotation + angleDelta);
+    }
+  };
+
   return (
-    <div className="flex h-screen w-full bg-dark-900 text-gray-100 overflow-hidden relative">
+    <div 
+      className="flex h-screen w-full bg-dark-900 text-gray-100 overflow-hidden relative"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
       <div className="flex-1 relative w-full h-full">
         {/* Mobile Sidebar Toggle Button */}
         <button 
@@ -317,7 +355,11 @@ function App() {
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
-          <group position={[modelPosition.x, modelPosition.y + (effectiveStock[1] / 2), modelPosition.z]}>
+          <group 
+            position={[modelPosition.x, modelPosition.y + ((effectiveStock[1] * arScale) / 2), modelPosition.z]}
+            scale={[arScale, arScale, arScale]}
+            rotation={[0, arRotation, 0]}
+          >
             <Suspense fallback={null}>
               <DynamicBlock 
                 size={effectiveStock} 
