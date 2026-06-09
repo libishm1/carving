@@ -4,7 +4,7 @@ import { OrbitControls, Environment, ContactShadows, Grid, TransformControls } f
 import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
-import { ARController } from './components/ARController';
+import { ARController, RegistrationStep } from './components/ARController';
 import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MousePointer2 } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -55,6 +55,11 @@ function App() {
   const [arScale, setArScale] = useState<number>(1);
   const [arRotation, setArRotation] = useState<number>(0);
   const touchState = useRef({ distance: 0, angle: 0, initialScale: 1, initialRotation: 0 });
+
+  // AR Registration Workflow
+  const [registrationStep, setRegistrationStep] = useState<RegistrationStep>('idle');
+  const [registrationPoints, setRegistrationPoints] = useState<THREE.Vector3[]>([]);
+  const [registrationMatrix, setRegistrationMatrix] = useState<THREE.Matrix4 | null>(null);
 
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
@@ -303,12 +308,26 @@ function App() {
         </div>
 
         {/* Massive Depth HUD */}
-        {drillDepth !== null && (
+        {drillDepth !== null && registrationStep === 'idle' && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
             <div className="bg-dark-900/90 border-2 border-primary-500/50 backdrop-blur-xl px-8 py-4 rounded-3xl shadow-2xl text-center">
               <div className="text-sm md:text-base text-primary-400 font-bold uppercase tracking-widest mb-1">Drill Depth</div>
               <div className="text-5xl md:text-7xl font-mono font-bold text-white tracking-tight">
                 {drillDepth.toFixed(2)} <span className="text-2xl md:text-3xl text-gray-400">mm</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AR Registration HUD */}
+        {registrationStep !== 'idle' && (
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-[90%] md:w-auto">
+            <div className="bg-purple-900/90 border-2 border-purple-500 backdrop-blur-xl px-8 py-4 rounded-3xl shadow-2xl text-center">
+              <div className="text-white font-bold text-lg animate-pulse whitespace-nowrap">
+                {registrationStep === 'p1' && "Tap Bottom-Left-Front Corner (Origin)"}
+                {registrationStep === 'p2' && "Tap Bottom-Right-Front Corner (Width)"}
+                {registrationStep === 'p3' && "Tap Top-Left-Front Corner (Height)"}
+                {registrationStep === 'p4' && "Tap Bottom-Left-Back Corner (Depth)"}
               </div>
             </div>
           </div>
@@ -352,24 +371,38 @@ function App() {
           <ARController 
             blockMeshRef={blockMeshRef} 
             onPlaceModel={setModelPosition} 
+            registrationStep={registrationStep}
+            setRegistrationStep={setRegistrationStep}
+            registrationPoints={registrationPoints}
+            setRegistrationPoints={setRegistrationPoints}
+            onRegistrationComplete={(matrix, dimensions) => {
+              setRegistrationMatrix(matrix);
+              setStockMode('custom');
+              setCustomStockSize(dimensions);
+              setArScale(1);
+              setArRotation(0);
+            }}
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
           <group 
-            position={[modelPosition.x, modelPosition.y + ((effectiveStock[1] * arScale) / 2), modelPosition.z]}
-            scale={[arScale, arScale, arScale]}
-            rotation={[0, arRotation, 0]}
+            matrix={registrationMatrix || undefined}
+            matrixAutoUpdate={!registrationMatrix}
+            position={registrationMatrix ? undefined : [modelPosition.x, modelPosition.y + ((effectiveStock[1] * arScale) / 2), modelPosition.z]}
+            scale={registrationMatrix ? undefined : [arScale, arScale, arScale]}
+            rotation={registrationMatrix ? undefined : [0, arRotation, 0]}
           >
-            <Suspense fallback={null}>
-              <DynamicBlock 
-                size={effectiveStock} 
-                onLoaded={(_box, _size, root) => {
-                  dynamicBlockRef.current = root;
-                  if (!isCarvingMode) setBlockMeshRef(root);
-                }} 
-              />
-              
-              {/* The Real Mesh with TransformControls */}
+            <group position={registrationMatrix ? [effectiveStock[0]/2, effectiveStock[1]/2, -effectiveStock[2]/2] : [0,0,0]}>
+              <Suspense fallback={null}>
+                <DynamicBlock 
+                  size={effectiveStock} 
+                  onLoaded={(_box, _size, root) => {
+                    dynamicBlockRef.current = root;
+                    if (!isCarvingMode) setBlockMeshRef(root);
+                  }} 
+                />
+                
+                {/* The Real Mesh with TransformControls */}
               {transformMode !== 'none' ? (
                 <TransformControls mode={transformMode}>
                   <Model 
@@ -427,6 +460,7 @@ function App() {
                 />
               )}
             </Suspense>
+            </group>
             <ContactShadows resolution={512} scale={10} blur={2} opacity={0.5} far={10} color="#000000" />
           </group>
           {selectedMaquettePoint && (

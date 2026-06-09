@@ -4,12 +4,29 @@ import { useXRHitTest } from '@react-three/xr';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 
+import { calculateRegistration } from '../utils/registration';
+
+export type RegistrationStep = 'idle' | 'p1' | 'p2' | 'p3' | 'p4';
+
 interface ARControllerProps {
   blockMeshRef: THREE.Object3D | null;
   onPlaceModel: (position: THREE.Vector3) => void;
+  registrationStep: RegistrationStep;
+  setRegistrationStep: (step: RegistrationStep) => void;
+  registrationPoints: THREE.Vector3[];
+  setRegistrationPoints: (points: THREE.Vector3[]) => void;
+  onRegistrationComplete: (matrix: THREE.Matrix4, dimensions: [number, number, number]) => void;
 }
 
-export const ARController: React.FC<ARControllerProps> = ({ blockMeshRef, onPlaceModel }) => {
+export const ARController: React.FC<ARControllerProps> = ({ 
+  blockMeshRef, 
+  onPlaceModel,
+  registrationStep,
+  setRegistrationStep,
+  registrationPoints,
+  setRegistrationPoints,
+  onRegistrationComplete
+}) => {
   const { camera } = useThree();
   const [physicalHitPoint, setPhysicalHitPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
@@ -65,21 +82,57 @@ export const ARController: React.FC<ARControllerProps> = ({ blockMeshRef, onPlac
       <sphereGeometry args={[0.02, 16, 16]} />
       <meshStandardMaterial color={isPlaced ? "#ef4444" : "#4ade80"} emissive={isPlaced ? "#ef4444" : "#4ade80"} emissiveIntensity={0.8} />
       
-      {!isPlaced && (
+      {(!isPlaced || registrationStep !== 'idle') && (
         <Html position={[0, 0.1, 0]} center zIndexRange={[100, 0]}>
-          <button 
-            className="bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 px-4 rounded-full shadow-lg whitespace-nowrap"
-            onClick={() => {
-              onPlaceModel(physicalHitPoint);
-              setIsPlaced(true);
-            }}
-          >
-            Place Model Here
-          </button>
+          <div className="flex gap-2">
+            {registrationStep === 'idle' ? (
+              <>
+                <button 
+                  className="bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 px-4 rounded-full shadow-lg whitespace-nowrap"
+                  onClick={() => {
+                    onPlaceModel(physicalHitPoint);
+                    setIsPlaced(true);
+                  }}
+                >
+                  Place Model Here
+                </button>
+                <button 
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-full shadow-lg whitespace-nowrap"
+                  onClick={() => {
+                    setRegistrationStep('p1');
+                    setRegistrationPoints([]);
+                    setIsPlaced(true); // Suppress depth until registration is done
+                  }}
+                >
+                  Map Stone (4-Point)
+                </button>
+              </>
+            ) : (
+              <button 
+                className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-full shadow-lg whitespace-nowrap border-2 border-white animate-pulse"
+                onClick={() => {
+                  const newPoints = [...registrationPoints, physicalHitPoint.clone()];
+                  setRegistrationPoints(newPoints);
+                  
+                  if (registrationStep === 'p1') setRegistrationStep('p2');
+                  else if (registrationStep === 'p2') setRegistrationStep('p3');
+                  else if (registrationStep === 'p3') setRegistrationStep('p4');
+                  else if (registrationStep === 'p4') {
+                    // Calculate final matrix!
+                    const { matrix, dimensions } = calculateRegistration(newPoints[0], newPoints[1], newPoints[2], newPoints[3]);
+                    onRegistrationComplete(matrix, dimensions);
+                    setRegistrationStep('idle');
+                  }
+                }}
+              >
+                Confirm Point {registrationPoints.length + 1}
+              </button>
+            )}
+          </div>
         </Html>
       )}
 
-      {isPlaced && drillDepth !== null && (
+      {isPlaced && drillDepth !== null && registrationStep === 'idle' && (
         <Html position={[0, 0.05, 0]} center zIndexRange={[100, 0]} className="pointer-events-none">
           <div className="bg-dark-900/90 border border-primary-500/50 text-primary-400 font-mono text-sm px-3 py-2 rounded shadow-lg whitespace-nowrap backdrop-blur-md">
             {drillDepth > 0 ? `Carve: ${drillDepth.toFixed(1)} mm` : `Too deep: ${Math.abs(drillDepth).toFixed(1)} mm`}
