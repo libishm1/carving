@@ -1,10 +1,14 @@
 import { useState, useMemo, Suspense, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Grid, Html } from '@react-three/drei';
+import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
+import { ARController } from './components/ARController';
 import { Settings2, Maximize, BoxSelect } from 'lucide-react';
 import * as THREE from 'three';
+
+export const store = createXRStore();
 
 // Dynamic Block Component for the Stock
 const DynamicBlock = ({ size, onLoaded }: { size: [number, number, number], onLoaded: (box: THREE.Box3, size: [number, number, number], root: THREE.Object3D) => void }) => {
@@ -41,6 +45,7 @@ function App() {
   const [carvingDepth, setCarvingDepth] = useState<number>(0);
   const [carvingNormal, setCarvingNormal] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
   const [isSelectingFace, setIsSelectingFace] = useState<boolean>(false);
+  const [modelPosition, setModelPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, -1, 0));
 
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
@@ -215,14 +220,28 @@ function App() {
   return (
     <div className="flex h-screen bg-dark-900 text-gray-100 overflow-hidden">
       <div className="flex-1 relative">
+        <button
+          onClick={() => store.enterAR()}
+          className="absolute bottom-4 left-4 z-50 bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center gap-2 transition-colors"
+        >
+          <BoxSelect className="w-5 h-5" />
+          Enter AR
+        </button>
         <Canvas camera={{ position: [2, 2, 2], fov: 45 }} gl={{ localClippingEnabled: true }}>
-          <color attach="background" args={['#121212']} />
-          <ambientLight intensity={0.5} />
+          <XR store={store}>
+            <color attach="background" args={['#121212']} />
+            <ambientLight intensity={0.5} />
           <directionalLight position={[10, 10, 10]} intensity={1} />
           <Environment preset="city" />
           <OrbitControls makeDefault />
+          
+          <ARController 
+            blockMeshRef={blockMeshRef} 
+            onPlaceModel={setModelPosition} 
+          />
+
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
-          <group position={[0, -1, 0]}>
+          <group position={modelPosition}>
             <Suspense fallback={null}>
               <DynamicBlock 
                 size={effectiveStock} 
@@ -303,6 +322,7 @@ function App() {
               <lineBasicMaterial attach="material" color="#ef4444" linewidth={2} />
             </line>
           )}
+          </XR>
         </Canvas>
 
         {fitResult && (
