@@ -54,3 +54,40 @@ export function calculateRegistration(
     dimensions: [width, height, depth]
   };
 }
+
+/**
+ * Constructs a coordinate system basis matrix from 3 points forming a triangle.
+ */
+export function calculateTriangleBasis(p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3): THREE.Matrix4 {
+  const xAxis = new THREE.Vector3().subVectors(p2, p1).normalize();
+  const tempYAxis = new THREE.Vector3().subVectors(p3, p1).normalize();
+  const zAxis = new THREE.Vector3().crossVectors(xAxis, tempYAxis).normalize();
+  const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+
+  const matrix = new THREE.Matrix4();
+  matrix.makeBasis(xAxis, yAxis, zAxis);
+  matrix.setPosition(p1);
+  return matrix;
+}
+
+/**
+ * Calculates a transformation matrix that aligns a digital 3-point triangle
+ * with a physical 3-point triangle in the real world.
+ */
+export function calculateTriangleRegistration(
+  digitalPoints: THREE.Vector3[],
+  physicalPoints: THREE.Vector3[]
+): THREE.Matrix4 {
+  if (digitalPoints.length !== 3 || physicalPoints.length !== 3) {
+    throw new Error("Exactly 3 points required for Triangle Registration");
+  }
+
+  const mDigital = calculateTriangleBasis(digitalPoints[0], digitalPoints[1], digitalPoints[2]);
+  const mPhysical = calculateTriangleBasis(physicalPoints[0], physicalPoints[1], physicalPoints[2]);
+
+  // M_final = M_physical * inverse(M_digital)
+  const mDigitalInv = mDigital.clone().invert();
+  const mFinal = mPhysical.clone().multiply(mDigitalInv);
+
+  return mFinal;
+}

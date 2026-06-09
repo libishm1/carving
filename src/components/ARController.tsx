@@ -6,7 +6,7 @@ import * as THREE from 'three';
 
 import { calculateRegistration } from '../utils/registration';
 
-export type RegistrationStep = 'idle' | 'p1' | 'p2' | 'p3' | 'p4';
+export type RegistrationStep = 'idle' | 'p1' | 'p2' | 'p3' | 'p4' | 'fiducial1' | 'fiducial2' | 'fiducial3';
 
 interface ARControllerProps {
   blockMeshRef: THREE.Object3D | null;
@@ -16,6 +16,8 @@ interface ARControllerProps {
   registrationPoints: THREE.Vector3[];
   setRegistrationPoints: (points: THREE.Vector3[]) => void;
   onRegistrationComplete: (matrix: THREE.Matrix4, dimensions: [number, number, number]) => void;
+  digitalPins: THREE.Vector3[];
+  onFiducialRegistrationComplete: (physicalPoints: THREE.Vector3[]) => void;
 }
 
 export const ARController: React.FC<ARControllerProps> = ({ 
@@ -25,7 +27,9 @@ export const ARController: React.FC<ARControllerProps> = ({
   setRegistrationStep,
   registrationPoints,
   setRegistrationPoints,
-  onRegistrationComplete
+  onRegistrationComplete,
+  digitalPins,
+  onFiducialRegistrationComplete
 }) => {
   const { camera } = useThree();
   const [physicalHitPoint, setPhysicalHitPoint] = useState<THREE.Vector3 | null>(null);
@@ -106,10 +110,22 @@ export const ARController: React.FC<ARControllerProps> = ({
                 >
                   Map Stone (4-Point)
                 </button>
+                {digitalPins.length === 3 && (
+                  <button 
+                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-full shadow-lg whitespace-nowrap"
+                    onClick={() => {
+                      setRegistrationStep('fiducial1');
+                      setRegistrationPoints([]);
+                      setIsPlaced(true);
+                    }}
+                  >
+                    Map Fiducials (3-Pin)
+                  </button>
+                )}
               </>
             ) : (
               <button 
-                className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-full shadow-lg whitespace-nowrap border-2 border-white animate-pulse"
+                className="bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-6 rounded-full shadow-lg whitespace-nowrap border-2 border-white animate-pulse"
                 onClick={() => {
                   const newPoints = [...registrationPoints, physicalHitPoint.clone()];
                   setRegistrationPoints(newPoints);
@@ -121,6 +137,12 @@ export const ARController: React.FC<ARControllerProps> = ({
                     // Calculate final matrix!
                     const { matrix, dimensions } = calculateRegistration(newPoints[0], newPoints[1], newPoints[2], newPoints[3]);
                     onRegistrationComplete(matrix, dimensions);
+                    setRegistrationStep('idle');
+                  }
+                  else if (registrationStep === 'fiducial1') setRegistrationStep('fiducial2');
+                  else if (registrationStep === 'fiducial2') setRegistrationStep('fiducial3');
+                  else if (registrationStep === 'fiducial3') {
+                    onFiducialRegistrationComplete(newPoints);
                     setRegistrationStep('idle');
                   }
                 }}

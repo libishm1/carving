@@ -5,7 +5,8 @@ import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
 import { ARController, type RegistrationStep } from './components/ARController';
-import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MousePointer2 } from 'lucide-react';
+import { calculateTriangleRegistration } from './utils/registration';
+import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MousePointer2, MapPin } from 'lucide-react';
 import * as THREE from 'three';
 
 export const store = createXRStore();
@@ -61,10 +62,15 @@ function App() {
   const [registrationPoints, setRegistrationPoints] = useState<THREE.Vector3[]>([]);
   const [registrationMatrix, setRegistrationMatrix] = useState<THREE.Matrix4 | null>(null);
 
+  // Custom Fiducial Pinning Workflow
+  const [isPinningMode, setIsPinningMode] = useState<boolean>(false);
+  const [digitalPins, setDigitalPins] = useState<THREE.Vector3[]>([]);
+
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
   const [blockMeshRef, setBlockMeshRef] = useState<THREE.Object3D | null>(null);
-  const dynamicBlockRef = useRef<THREE.Object3D | null>(null);
+  const dynamicBlockRef = useRef<THREE.Group | null>(null);
+  const mainGroupRef = useRef<THREE.Group>(null);
   const [selectedMaquettePoint, setSelectedMaquettePoint] = useState<THREE.Vector3 | null>(null);
   const [selectedBlockPoint, setSelectedBlockPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
@@ -236,15 +242,30 @@ function App() {
   }, [isCarvingMode, blockMeshRef, carvingNormal]);
 
   // Handle Maquette Clicks
-  const handleMaquetteClick = (maquettePoint: THREE.Vector3, normal?: THREE.Vector3) => {
+  const handleMaquetteClick = (e: any) => {
+    e.stopPropagation();
+    if (isPinningMode && mainGroupRef.current) {
+      const localPoint = e.point.clone();
+      mainGroupRef.current.worldToLocal(localPoint);
+      setDigitalPins(prev => {
+        if (prev.length >= 3) return [localPoint]; 
+        return [...prev, localPoint];
+      });
+      return;
+    }
+
+    if (!isCarvingMode) return;
+    const { point, face } = e;
+    const normal = face?.normal.clone().applyQuaternion(e.object.quaternion);
+
     if (isSelectingFace && normal) {
       setCarvingNormal(normal);
       setIsSelectingFace(false);
       return;
     }
 
-    setSelectedMaquettePoint(maquettePoint);
-    updateSnapping(maquettePoint, blockMeshRef);
+    setSelectedMaquettePoint(point);
+    updateSnapping(point, blockMeshRef);
   };
 
   // Touch Gesture Handlers for Pinch/Twist
@@ -291,21 +312,35 @@ function App() {
           {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
 
-        {/* Transform Toolbar */}
-        <div className="absolute top-4 left-4 z-40 bg-dark-800/90 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-dark-600 flex gap-2">
-          <button onClick={() => setTransformMode('none')} className={`p-3 rounded-xl transition-colors ${transformMode === 'none' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Select / Orbit">
-            <MousePointer2 className="w-5 h-5" />
-          </button>
-          <button onClick={() => setTransformMode('translate')} className={`p-3 rounded-xl transition-colors ${transformMode === 'translate' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Move">
-            <Move className="w-5 h-5" />
-          </button>
-          <button onClick={() => setTransformMode('rotate')} className={`p-3 rounded-xl transition-colors ${transformMode === 'rotate' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Rotate">
-            <RotateCw className="w-5 h-5" />
-          </button>
-          <button onClick={() => setTransformMode('scale')} className={`p-3 rounded-xl transition-colors ${transformMode === 'scale' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Scale">
-            <Scaling className="w-5 h-5" />
-          </button>
-        </div>
+        {/* Transform Tools Overlay */}
+        {!isSidebarOpen && !isCarvingMode && (
+          <div className="absolute top-20 left-4 z-40 bg-dark-900/90 border border-dark-600 rounded-xl shadow-2xl p-2 flex flex-col gap-2">
+            <button title="Translate" onClick={() => setTransformMode(m => m === 'translate' ? 'none' : 'translate')} className={`p-3 rounded-lg transition-colors ${transformMode === 'translate' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
+              <Move className="w-5 h-5" />
+            </button>
+            <button title="Rotate" onClick={() => setTransformMode(m => m === 'rotate' ? 'none' : 'rotate')} className={`p-3 rounded-lg transition-colors ${transformMode === 'rotate' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
+              <RotateCw className="w-5 h-5" />
+            </button>
+            <button title="Scale" onClick={() => setTransformMode(m => m === 'scale' ? 'none' : 'scale')} className={`p-3 rounded-lg transition-colors ${transformMode === 'scale' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
+              <Scaling className="w-5 h-5" />
+            </button>
+            <div className="h-px bg-dark-700 my-1 mx-2"></div>
+            <button title="Place Digital Pins" onClick={() => { setIsPinningMode(!isPinningMode); setTransformMode('none'); }} className={`p-3 rounded-lg transition-colors ${isPinningMode ? 'bg-red-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
+              <MapPin className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+
+        {/* Pinning Instructions */}
+        {isPinningMode && digitalPins.length < 3 && (
+          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
+            <div className="bg-red-900/90 border border-red-500 backdrop-blur-xl px-6 py-3 rounded-2xl shadow-2xl text-center">
+              <div className="text-white font-bold animate-pulse">
+                Click the 3D model to place Pin {digitalPins.length + 1} of 3
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Massive Depth HUD */}
         {drillDepth !== null && registrationStep === 'idle' && (
@@ -328,6 +363,9 @@ function App() {
                 {registrationStep === 'p2' && "Tap Bottom-Right-Front Corner (Width)"}
                 {registrationStep === 'p3' && "Tap Top-Left-Front Corner (Height)"}
                 {registrationStep === 'p4' && "Tap Bottom-Left-Back Corner (Depth)"}
+                {registrationStep === 'fiducial1' && "Tap Physical Sticker 1"}
+                {registrationStep === 'fiducial2' && "Tap Physical Sticker 2"}
+                {registrationStep === 'fiducial3' && "Tap Physical Sticker 3"}
               </div>
             </div>
           </div>
@@ -382,10 +420,28 @@ function App() {
               setArScale(1);
               setArRotation(0);
             }}
+            digitalPins={digitalPins}
+            onFiducialRegistrationComplete={(physicalPoints) => {
+              try {
+                // The digitalPins were recorded in world space, but we are about to apply a matrix 
+                // to the group that will redefine world space.
+                // Wait, if the model hasn't been transformed yet, the digital pins ARE in the local
+                // un-transformed space of the model!
+                const matrix = calculateTriangleRegistration(digitalPins, physicalPoints);
+                setRegistrationMatrix(matrix);
+                setArScale(1);
+                setArRotation(0);
+                setIsPinningMode(false);
+              } catch (e) {
+                console.error(e);
+                alert("Failed to calculate triangle alignment. Please ensure your 3 points are not in a straight line.");
+              }
+            }}
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
           <group 
+            ref={mainGroupRef}
             matrix={registrationMatrix || undefined}
             matrixAutoUpdate={!registrationMatrix}
             position={registrationMatrix ? undefined : [modelPosition.x, modelPosition.y + ((effectiveStock[1] * arScale) / 2), modelPosition.z]}
@@ -462,6 +518,19 @@ function App() {
             </Suspense>
             </group>
             <ContactShadows resolution={512} scale={10} blur={2} opacity={0.5} far={10} color="#000000" />
+            
+            {/* Render Digital Pins so they stick to the model even when rotated */}
+            {digitalPins.map((pin, i) => (
+              <mesh key={i} position={pin}>
+                <sphereGeometry args={[0.015, 16, 16]} />
+                <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.8} />
+                <Html position={[0, 0.02, 0]} center className="pointer-events-none">
+                  <div className="bg-red-600 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg">
+                    {i + 1}
+                  </div>
+                </Html>
+              </mesh>
+            ))}
           </group>
           {selectedMaquettePoint && (
             <mesh position={selectedMaquettePoint}>
