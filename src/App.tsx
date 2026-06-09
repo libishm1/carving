@@ -253,7 +253,7 @@ function App() {
               
               {/* The Real Mesh (Always visible) */}
               <Model 
-                url="/models/01_maquette_reduced.stl" 
+                url={`${import.meta.env.BASE_URL}models/01_maquette_reduced.stl`} 
                 color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
                 scale={scaleFactors}
                 clippingPlanes={[]}
