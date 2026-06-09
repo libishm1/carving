@@ -6,7 +6,8 @@ import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
 import { ARController, type RegistrationStep } from './components/ARController';
 import { calculateTriangleRegistration } from './utils/registration';
-import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MousePointer2, MapPin } from 'lucide-react';
+import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MapPin } from 'lucide-react';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 
 export const store = createXRStore();
@@ -69,7 +70,7 @@ function App() {
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
   const [blockMeshRef, setBlockMeshRef] = useState<THREE.Object3D | null>(null);
-  const dynamicBlockRef = useRef<THREE.Group | null>(null);
+  const dynamicBlockRef = useRef<THREE.Object3D | null>(null);
   const mainGroupRef = useRef<THREE.Group>(null);
   const [selectedMaquettePoint, setSelectedMaquettePoint] = useState<THREE.Vector3 | null>(null);
   const [selectedBlockPoint, setSelectedBlockPoint] = useState<THREE.Vector3 | null>(null);
