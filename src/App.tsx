@@ -4,7 +4,7 @@ import { OrbitControls, Environment, ContactShadows, Grid, TransformControls } f
 import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
-import { ARController, RegistrationStep } from './components/ARController';
+import { ARController, type RegistrationStep } from './components/ARController';
 import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MousePointer2 } from 'lucide-react';
 import * as THREE from 'three';
 
