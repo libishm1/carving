@@ -287,6 +287,21 @@ function App() {
                 />
               )}
             </Suspense>
+            
+            {/* Depth Metric at the Corner of the Object */}
+            {drillDepth !== null && selectedBlockPoint && (
+              <Html 
+                position={[effectiveStock[0] / 2 + 0.05, effectiveStock[1] / 2 + 0.05, effectiveStock[2] / 2 + 0.05]} 
+                center 
+                zIndexRange={[100, 0]} 
+                className="pointer-events-none"
+              >
+                <div className="bg-dark-900/90 border border-red-500/50 text-red-400 font-mono text-sm px-3 py-2 rounded-lg shadow-2xl whitespace-nowrap backdrop-blur-md">
+                  Depth: {drillDepth.toFixed(2)} mm
+                </div>
+              </Html>
+            )}
+
             <ContactShadows resolution={512} scale={10} blur={2} opacity={0.5} far={10} color="#000000" />
           </group>
           {selectedMaquettePoint && (
@@ -299,13 +314,6 @@ function App() {
             <mesh position={selectedBlockPoint}>
               <sphereGeometry args={[0.03, 16, 16]} />
               <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.5} />
-              {drillDepth !== null && (
-                <Html position={[0, 0.1, 0]} center zIndexRange={[100, 0]} className="pointer-events-none">
-                  <div className="bg-dark-900/90 border border-red-500/50 text-red-400 font-mono text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap backdrop-blur-md">
-                    Depth: {drillDepth.toFixed(2)} mm
-                  </div>
-                </Html>
-              )}
             </mesh>
           )}
           {selectedMaquettePoint && selectedBlockPoint && (
