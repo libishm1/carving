@@ -1,11 +1,11 @@
 import { useState, useMemo, Suspense, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Grid, Html } from '@react-three/drei';
+import { OrbitControls, Environment, ContactShadows, Grid, TransformControls } from '@react-three/drei';
 import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
 import { ARController } from './components/ARController';
-import { Settings2, Maximize, BoxSelect, Menu, X, Upload } from 'lucide-react';
+import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MousePointer2 } from 'lucide-react';
 import * as THREE from 'three';
 
 export const store = createXRStore();
@@ -47,6 +47,7 @@ function App() {
   const [isSelectingFace, setIsSelectingFace] = useState<boolean>(false);
   const [modelPosition, setModelPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, -1, 0));
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [transformMode, setTransformMode] = useState<'translate' | 'rotate' | 'scale' | 'none'>('none');
   const [modelUrl, setModelUrl] = useState<string>(`${import.meta.env.BASE_URL}models/01_maquette_reduced.stl`);
   const [modelExt, setModelExt] = useState<string>('stl');
 
@@ -247,6 +248,22 @@ function App() {
           {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
 
+        {/* Transform Toolbar */}
+        <div className="absolute top-4 left-4 z-40 bg-dark-800/90 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-dark-600 flex gap-2">
+          <button onClick={() => setTransformMode('none')} className={`p-3 rounded-xl transition-colors ${transformMode === 'none' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Select / Orbit">
+            <MousePointer2 className="w-5 h-5" />
+          </button>
+          <button onClick={() => setTransformMode('translate')} className={`p-3 rounded-xl transition-colors ${transformMode === 'translate' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Move">
+            <Move className="w-5 h-5" />
+          </button>
+          <button onClick={() => setTransformMode('rotate')} className={`p-3 rounded-xl transition-colors ${transformMode === 'rotate' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Rotate">
+            <RotateCw className="w-5 h-5" />
+          </button>
+          <button onClick={() => setTransformMode('scale')} className={`p-3 rounded-xl transition-colors ${transformMode === 'scale' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-dark-700 hover:text-white'}`} title="Scale">
+            <Scaling className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Massive Depth HUD */}
         {drillDepth !== null && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
@@ -310,23 +327,44 @@ function App() {
                 }} 
               />
               
-              {/* The Real Mesh (Always visible) */}
-              <Model 
-                url={modelUrl} 
-                extension={modelExt}
-                color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
-                scale={scaleFactors}
-                clippingPlanes={[]}
-                polygonOffset={true}
-                polygonOffsetFactor={2}
-                polygonOffsetUnits={2}
-                onLoaded={(_box, _size, root) => {
-                  handleSculptureLoaded(_box, _size);
-                  if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
-                  else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
-                }}
-                onPointerClick={handleMaquetteClick}
-              />
+              {/* The Real Mesh with TransformControls */}
+              {transformMode !== 'none' ? (
+                <TransformControls mode={transformMode}>
+                  <Model 
+                    url={modelUrl} 
+                    extension={modelExt}
+                    color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
+                    scale={scaleFactors}
+                    clippingPlanes={[]}
+                    polygonOffset={true}
+                    polygonOffsetFactor={2}
+                    polygonOffsetUnits={2}
+                    onLoaded={(_box, _size, root) => {
+                      handleSculptureLoaded(_box, _size);
+                      if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
+                      else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
+                    }}
+                    onPointerClick={handleMaquetteClick}
+                  />
+                </TransformControls>
+              ) : (
+                <Model 
+                  url={modelUrl} 
+                  extension={modelExt}
+                  color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
+                  scale={scaleFactors}
+                  clippingPlanes={[]}
+                  polygonOffset={true}
+                  polygonOffsetFactor={2}
+                  polygonOffsetUnits={2}
+                  onLoaded={(_box, _size, root) => {
+                    handleSculptureLoaded(_box, _size);
+                    if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
+                    else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
+                  }}
+                  onPointerClick={handleMaquetteClick}
+                />
+              )}
 
               {/* The Tween Simulation Mesh */}
               {isCarvingMode && maquetteMeshRef && (
