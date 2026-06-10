@@ -449,6 +449,7 @@ function App() {
                 alert("Failed to calculate triangle alignment. Please ensure your 3 points are not in a straight line.");
               }
             }}
+            useDomOverlay={useDomOverlay}
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
