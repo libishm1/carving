@@ -72,9 +72,9 @@ function processObject(
         }
         child.material = new THREE.MeshStandardMaterial({
           color: new THREE.Color(props.color || '#ffffff'),
-          wireframe: props.wireframe,
+          wireframe: props.wireframe || false,
           opacity: props.opacity ?? 1,
-          transparent: props.transparent,
+          transparent: props.transparent || false,
           side: THREE.DoubleSide,
           clippingPlanes: props.clippingPlanes || [],
           clipIntersection: false,
@@ -92,7 +92,7 @@ function processObject(
       scale={props.scale} 
       position={props.position} 
       onClick={props.onPointerClick ? (e: any) => {
-        e.stopPropagation();
+        e.stopPropagation?.();
         let normal = undefined;
         if (e.face) {
           const normalMatrix = new THREE.Matrix3().getNormalMatrix(e.object.matrixWorld);
