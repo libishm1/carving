@@ -135,6 +135,12 @@ function App() {
     }
 
     if (!isFinite(factor) || factor <= 0) factor = 1;
+
+    // Prevent floating point oscillation loops (e.g. 1.99999 vs 2.00000)
+    if (Math.abs(factor - currentScale) < 0.0001) {
+      factor = currentScale;
+    }
+
     appliedScaleRef.current = factor;
 
     const factors: [number, number, number] = [factor, factor, factor];

@@ -96,6 +96,11 @@ export const TweenMesh = ({
     }
   }, [geometryData, onLoaded]);
 
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
   useEffect(() => {
     if (!geometryData || !meshRef.current) return;
     const { baseGeometry, maxDistances } = geometryData;
@@ -121,9 +126,9 @@ export const TweenMesh = ({
         (baseGeometry as any).computeBoundsTree(); 
     }
     
-    if (onUpdate) onUpdate();
+    if (onUpdateRef.current) onUpdateRef.current();
     
-  }, [geometryData, tweenValue, carvingNormal, onUpdate]);
+  }, [geometryData, tweenValue, carvingNormal]);
 
   return (
     <mesh ref={meshRef} geometry={geometryData?.baseGeometry || undefined}>
