@@ -9,7 +9,8 @@ import { calculateTriangleRegistration } from './utils/registration';
 import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MapPin } from 'lucide-react';
 import * as THREE from 'three';
 
-export const store = createXRStore();
+export const storeWithDOM = createXRStore({ domOverlay: true });
+export const storeWithoutDOM = createXRStore();
 
 // Dynamic Block Component for the Stock
 const DynamicBlock = ({ size, onLoaded }: { size: [number, number, number], onLoaded: (box: THREE.Box3, size: [number, number, number], root: THREE.Object3D) => void }) => {
@@ -79,6 +80,7 @@ function App() {
   const [selectedMaquetteLocalPoint, setSelectedMaquetteLocalPoint] = useState<THREE.Vector3 | null>(null);
   const [selectedBlockLocalPoint, setSelectedBlockLocalPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
+  const [useDomOverlay, setUseDomOverlay] = useState(true);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -301,7 +303,15 @@ function App() {
         alert("AR (immersive-ar) is not supported on this device/browser.");
         return;
       }
-      await store.enterAR();
+      
+      try {
+        setUseDomOverlay(true);
+        await storeWithDOM.enterAR();
+      } catch (domError) {
+        console.warn("DOM Overlay session failed, falling back to 3D Billboards", domError);
+        setUseDomOverlay(false);
+        await storeWithoutDOM.enterAR();
+      }
     } catch (error: any) {
       alert("Failed to enter AR: " + (error.message || error));
     }
@@ -405,7 +415,7 @@ function App() {
           Enter AR
         </button>
         <Canvas camera={{ position: [2, 2, 2], fov: 45 }} gl={{ localClippingEnabled: true }}>
-          <XR store={store}>
+          <XR store={useDomOverlay ? storeWithDOM : storeWithoutDOM}>
             <ambientLight intensity={0.4} />
             <hemisphereLight intensity={0.6} color="#ffffff" groundColor="#444444" />
             <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />

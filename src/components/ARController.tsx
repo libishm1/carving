@@ -18,6 +18,7 @@ interface ARControllerProps {
   onRegistrationComplete: (matrix: THREE.Matrix4, dimensions: [number, number, number]) => void;
   digitalPins: THREE.Vector3[];
   onFiducialRegistrationComplete: (physicalPoints: THREE.Vector3[]) => void;
+  useDomOverlay: boolean;
 }
 
 export const ARController: React.FC<ARControllerProps> = ({ 
@@ -29,7 +30,8 @@ export const ARController: React.FC<ARControllerProps> = ({
   setRegistrationPoints,
   onRegistrationComplete,
   digitalPins,
-  onFiducialRegistrationComplete
+  onFiducialRegistrationComplete,
+  useDomOverlay
 }) => {
   const { camera } = useThree();
   const [physicalHitPoint, setPhysicalHitPoint] = useState<THREE.Vector3 | null>(null);
@@ -121,58 +123,115 @@ export const ARController: React.FC<ARControllerProps> = ({
       <meshStandardMaterial color={isPlaced ? "#ef4444" : "#4ade80"} emissive={isPlaced ? "#ef4444" : "#4ade80"} emissiveIntensity={0.8} />
       
       {(!isPlaced || registrationStep !== 'idle') && (
-        <group position={[0, 0.15, 0]}>
-          {registrationStep === 'idle' ? (
-            <>
-              <Button3D 
-                position={[0, 0.1, 0]} 
-                text="Place Model Here" 
-                color="#2563eb"
-                onClick={() => {
-                  onPlaceModel(physicalHitPoint);
-                  setIsPlaced(true);
-                }}
-              />
-              <Button3D 
-                position={[0, 0, 0]} 
-                text="Map Stone (4-Point)" 
-                color="#9333ea"
-                onClick={() => {
-                  setRegistrationStep('p1');
-                  setRegistrationPoints([]);
-                  setIsPlaced(true);
-                }}
-              />
-              {digitalPins.length === 3 && (
+        useDomOverlay ? (
+          <Html position={[0, 0.1, 0]} center zIndexRange={[100, 0]}>
+            <div className="flex gap-2">
+              {registrationStep === 'idle' ? (
+                <>
+                  <button 
+                    className="bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 px-4 rounded-full shadow-lg whitespace-nowrap"
+                    onClick={() => {
+                      onPlaceModel(physicalHitPoint);
+                      setIsPlaced(true);
+                    }}
+                  >
+                    Place Model Here
+                  </button>
+                  <button 
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-full shadow-lg whitespace-nowrap"
+                    onClick={() => {
+                      setRegistrationStep('p1');
+                      setRegistrationPoints([]);
+                      setIsPlaced(true);
+                    }}
+                  >
+                    Map Stone (4-Point)
+                  </button>
+                  {digitalPins.length === 3 && (
+                    <button 
+                      className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-full shadow-lg whitespace-nowrap"
+                      onClick={() => {
+                        setRegistrationStep('fiducial1');
+                        setRegistrationPoints([]);
+                        setIsPlaced(true);
+                      }}
+                    >
+                      Map Fiducials (3-Pin)
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button 
+                  className="bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-6 rounded-full shadow-lg whitespace-nowrap border-2 border-white animate-pulse"
+                  onClick={handleConfirm}
+                >
+                  Confirm Point {registrationPoints.length + 1}
+                </button>
+              )}
+            </div>
+          </Html>
+        ) : (
+          <group position={[0, 0.15, 0]}>
+            {registrationStep === 'idle' ? (
+              <>
                 <Button3D 
-                  position={[0, -0.1, 0]} 
-                  text="Map Fiducials (3-Pin)" 
-                  color="#dc2626"
+                  position={[0, 0.1, 0]} 
+                  text="Place Model Here" 
+                  color="#2563eb"
                   onClick={() => {
-                    setRegistrationStep('fiducial1');
+                    onPlaceModel(physicalHitPoint);
+                    setIsPlaced(true);
+                  }}
+                />
+                <Button3D 
+                  position={[0, 0, 0]} 
+                  text="Map Stone (4-Point)" 
+                  color="#9333ea"
+                  onClick={() => {
+                    setRegistrationStep('p1');
                     setRegistrationPoints([]);
                     setIsPlaced(true);
                   }}
                 />
-              )}
-            </>
-          ) : (
-            <Button3D 
-              position={[0, 0, 0]} 
-              text={`Confirm Point ${registrationPoints.length + 1}`} 
-              color="#dc2626"
-              onClick={handleConfirm}
-            />
-          )}
-        </group>
+                {digitalPins.length === 3 && (
+                  <Button3D 
+                    position={[0, -0.1, 0]} 
+                    text="Map Fiducials (3-Pin)" 
+                    color="#dc2626"
+                    onClick={() => {
+                      setRegistrationStep('fiducial1');
+                      setRegistrationPoints([]);
+                      setIsPlaced(true);
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <Button3D 
+                position={[0, 0, 0]} 
+                text={`Confirm Point ${registrationPoints.length + 1}`} 
+                color="#dc2626"
+                onClick={handleConfirm}
+              />
+            )}
+          </group>
+        )
       )}
 
       {isPlaced && drillDepth !== null && registrationStep === 'idle' && (
-        <Billboard position={[0, 0.1, 0]}>
-          <Text fontSize={0.04} color="#60a5fa" outlineColor="#1e3a8a" outlineWidth={0.005}>
-            {drillDepth > 0 ? `Carve: ${drillDepth.toFixed(1)} mm` : `Too deep: ${Math.abs(drillDepth).toFixed(1)} mm`}
-          </Text>
-        </Billboard>
+        useDomOverlay ? (
+          <Html position={[0, 0.05, 0]} center zIndexRange={[100, 0]} className="pointer-events-none">
+            <div className="bg-dark-900/90 border border-primary-500/50 text-primary-400 font-mono text-sm px-3 py-2 rounded shadow-lg whitespace-nowrap backdrop-blur-md">
+              {drillDepth > 0 ? `Carve: ${drillDepth.toFixed(1)} mm` : `Too deep: ${Math.abs(drillDepth).toFixed(1)} mm`}
+            </div>
+          </Html>
+        ) : (
+          <Billboard position={[0, 0.1, 0]}>
+            <Text fontSize={0.04} color="#60a5fa" outlineColor="#1e3a8a" outlineWidth={0.005}>
+              {drillDepth > 0 ? `Carve: ${drillDepth.toFixed(1)} mm` : `Too deep: ${Math.abs(drillDepth).toFixed(1)} mm`}
+            </Text>
+          </Billboard>
+        )
       )}
     </mesh>
   );
