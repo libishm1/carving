@@ -529,7 +529,7 @@ function App() {
                   <TransformControls 
                     object={transformGroupRef.current} 
                     mode={transformMode} 
-                    onChange={updateBoundingBox}
+                    onMouseUp={updateBoundingBox}
                   />
                 )}
               </Suspense>
