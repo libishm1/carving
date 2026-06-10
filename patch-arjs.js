@@ -10,7 +10,7 @@ const file = path.join(__dirname, 'node_modules', '@artcom', 'react-three-arjs',
 try {
   let code = fs.readFileSync(file, 'utf8');
 
-  // Fix the React 18 Strict Mode unmount crash by checking if arController exists before disposing
+  // Fix the React 18 unmount crash by checking if arController exists before disposing
   code = code.replace(
     'arContext.arToolkitContext.arController.dispose();',
     'if (arContext.arToolkitContext.arController) { arContext.arToolkitContext.arController.dispose(); }'
@@ -21,9 +21,11 @@ try {
     'if (arContext.arToolkitContext.arController && arContext.arToolkitContext.arController.cameraParam)'
   );
 
-  // Fix React 18 Strict Mode remount crash by removing destructive deletes
-  code = code.replace('delete arContext.arToolkitContext;', '');
-  code = code.replace('delete arContext.arToolkitSource;', '');
+  // Fix the "Cannot read properties of null (reading 'getTracks')" crash
+  code = code.replace(
+    'video.srcObject.getTracks().map(function (track)',
+    '(video.srcObject ? video.srcObject.getTracks() : []).map(function (track)'
+  );
 
   fs.writeFileSync(file, code);
   console.log('Successfully patched @artcom/react-three-arjs unmount bug!');

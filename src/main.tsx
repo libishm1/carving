@@ -22,9 +22,7 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
     <ErrorBoundary>
       <App />
-    </ErrorBoundary>
-  </StrictMode>,
+    </ErrorBoundary>,
 )
