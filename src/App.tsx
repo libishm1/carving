@@ -9,7 +9,12 @@ import { calculateTriangleRegistration } from './utils/registration';
 import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MapPin } from 'lucide-react';
 import * as THREE from 'three';
 
-export const store = createXRStore();
+export const store = createXRStore({
+  domOverlay: { root: document.body },
+  sessionInit: {
+    optionalFeatures: ['hit-test', 'dom-overlay']
+  }
+});
 
 // Dynamic Block Component for the Stock
 const DynamicBlock = ({ size, onLoaded }: { size: [number, number, number], onLoaded: (box: THREE.Box3, size: [number, number, number], root: THREE.Object3D) => void }) => {
@@ -284,7 +289,7 @@ function App() {
 
   return (
     <div 
-      className="flex h-screen w-full bg-dark-900 text-gray-100 overflow-hidden relative"
+      className="flex h-[100dvh] w-full bg-dark-900 text-gray-100 overflow-hidden relative"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
     >
@@ -297,7 +302,7 @@ function App() {
         </button>
 
         {!isCarvingMode && (
-          <div className={`absolute top-20 left-4 z-40 bg-dark-900/90 border border-dark-600 rounded-xl shadow-2xl p-2 flex flex-col gap-2 transition-opacity ${isSidebarOpen ? 'opacity-0 md:opacity-100 pointer-events-none md:pointer-events-auto' : 'opacity-100'}`}>
+          <div className={`absolute bottom-24 md:top-20 left-4 z-40 bg-dark-900/90 border border-dark-600 rounded-xl shadow-2xl p-2 flex flex-col gap-2 transition-opacity ${isSidebarOpen ? 'opacity-0 md:opacity-100 pointer-events-none md:pointer-events-auto' : 'opacity-100'}`}>
             <button title="Translate" onClick={() => setTransformMode(m => m === 'translate' ? 'none' : 'translate')} className={`p-3 rounded-lg transition-colors ${transformMode === 'translate' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
               <Move className="w-5 h-5" />
             </button>
@@ -346,11 +351,11 @@ function App() {
         )}
 
         {drillDepth !== null && registrationStep === 'idle' && (
-          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
-            <div className="bg-dark-900/90 border-2 border-primary-500/50 backdrop-blur-xl px-8 py-4 rounded-3xl shadow-2xl text-center">
-              <div className="text-sm md:text-base text-primary-400 font-bold uppercase tracking-widest mb-1">Drill Depth</div>
-              <div className="text-5xl md:text-7xl font-mono font-bold text-white tracking-tight">
-                {drillDepth.toFixed(2)} <span className="text-2xl md:text-3xl text-gray-400">mm</span>
+          <div className="absolute top-4 md:top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
+            <div className="bg-dark-900/90 border-2 border-primary-500/50 backdrop-blur-xl px-4 py-2 md:px-8 md:py-4 rounded-2xl md:rounded-3xl shadow-2xl text-center">
+              <div className="text-xs md:text-base text-primary-400 font-bold uppercase tracking-widest mb-1">Drill Depth</div>
+              <div className="text-4xl md:text-7xl font-mono font-bold text-white tracking-tight">
+                {drillDepth.toFixed(2)} <span className="text-xl md:text-3xl text-gray-400">mm</span>
               </div>
             </div>
           </div>
@@ -381,7 +386,6 @@ function App() {
         </button>
         <Canvas camera={{ position: [2, 2, 2], fov: 45 }} gl={{ localClippingEnabled: true }}>
           <XR store={store}>
-            <color attach="background" args={['#121212']} />
             <ambientLight intensity={0.4} />
             <hemisphereLight intensity={0.6} color="#ffffff" groundColor="#444444" />
             <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
