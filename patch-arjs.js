@@ -27,6 +27,13 @@ try {
     '(video.srcObject ? video.srcObject.getTracks() : []).map(function (track)'
   );
 
+  // Fix React 18 Strict Mode / R3F re-render teardown bugs
+  // By removing the unstable dependencies, the effect only runs on mount and unmount!
+  code = code.replace(
+    '}, [arContext, camera, onCameraStreamReady, onCameraStreamError, onResize, onUnmount]);',
+    '}, []);'
+  );
+
   fs.writeFileSync(file, code);
   console.log('Successfully patched @artcom/react-three-arjs unmount bug!');
 } catch (e) {

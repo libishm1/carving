@@ -440,8 +440,7 @@ function App() {
         {arMode === 'html5' ? (
           <ARCanvas 
             camera={{ position: [0, 0, 0] }}
-            onCameraStreamReady={() => console.log("AR.js stream ready")}
-            onCameraStreamError={() => alert("Failed to access camera for AR.js")}
+            sourceType={"webcam"}
           >
             <ambientLight intensity={0.4} />
             <hemisphereLight intensity={0.6} color="#ffffff" groundColor="#444444" />
