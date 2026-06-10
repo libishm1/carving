@@ -10,7 +10,7 @@ import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scalin
 import * as THREE from 'three';
 
 export const store = createXRStore({
-  domOverlay: { root: document.body },
+  domOverlay: true,
   sessionInit: {
     optionalFeatures: ['hit-test', 'dom-overlay']
   }
