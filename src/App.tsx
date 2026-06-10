@@ -9,9 +9,7 @@ import { calculateTriangleRegistration } from './utils/registration';
 import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MapPin } from 'lucide-react';
 import * as THREE from 'three';
 
-export const store = createXRStore({
-  domOverlay: true
-});
+export const store = createXRStore();
 
 // Dynamic Block Component for the Stock
 const DynamicBlock = ({ size, onLoaded }: { size: [number, number, number], onLoaded: (box: THREE.Box3, size: [number, number, number], root: THREE.Object3D) => void }) => {
