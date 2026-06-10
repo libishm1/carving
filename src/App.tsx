@@ -1,6 +1,6 @@
 import { useState, useMemo, Suspense, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Grid, TransformControls } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Grid, TransformControls, Html } from '@react-three/drei';
 import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
@@ -107,7 +107,7 @@ function App() {
   }, [isCarvingMode]);
 
   // Calculate scaling and fit
-  const { scaleFactors, fitResult, currentSize, effectiveStock } = useMemo(() => {
+  const { scaleFactors, fitResult, currentSize } = useMemo(() => {
     let factors: [number, number, number] = [1, 1, 1];
     
     if (mode === 'multiplier') {
@@ -139,7 +139,7 @@ function App() {
       sculptureSize[2] * factors[2]
     ];
 
-    return { scaleFactors: factors, fitResult: null, currentSize: scaledExtents };
+    return { scaleFactors: factors, fitResult: null as { fits: boolean, clearance: number[] } | null, currentSize: scaledExtents };
   }, [sculptureSize, customStockSize, mode, value]);
 
   const effectiveStock: [number, number, number] = useMemo(() => {
@@ -610,7 +610,7 @@ function App() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Clearance:</span>
                   <span className={`font-mono ${fitResult.fits ? 'text-green-400' : 'text-red-400'}`}>
-                    {fitResult.clearance.map(c => c.toFixed(2)).join(', ')}
+                    {fitResult.clearance.map((c: number) => c.toFixed(2)).join(', ')}
                   </span>
                 </div>
               </div>

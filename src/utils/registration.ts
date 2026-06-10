@@ -61,7 +61,6 @@ export function calculateRegistration(
 export function calculateTriangleBasis(p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3) {
   // Vector from p1 to p2 forms the X axis
   const xAxis = new THREE.Vector3().subVectors(p2, p1);
-  const width = xAxis.length();
   
   // Vector from p1 to p3
   const v13 = new THREE.Vector3().subVectors(p3, p1);
@@ -80,9 +79,6 @@ export function calculateTriangleBasis(p1: THREE.Vector3, p2: THREE.Vector3, p3:
   
   // Recalculate Y axis to ensure perfect orthogonality
   const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
-  
-  const height = v13.projectOnVector(yAxis).length();
-  const depth = v13.projectOnVector(zAxis).length(); // Should be ~0
 
   const matrix = new THREE.Matrix4();
   matrix.makeBasis(xAxis, yAxis, zAxis);
