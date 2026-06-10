@@ -1,7 +1,7 @@
 import { useState, useMemo, Suspense, useRef, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { ARCanvas, ARMarker } from '@artcom/react-three-arjs';
-import { OrbitControls, ContactShadows, Grid, TransformControls, Html, DeviceOrientationControls } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Grid, TransformControls, Html } from '@react-three/drei';
 import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
@@ -320,7 +320,6 @@ function App() {
         } catch (basicError) {
           console.warn("WebXR basic session failed, falling back to HTML5", basicError);
           setArMode('html5');
-          startHtml5Camera();
         }
       }
     } catch (error: any) {
