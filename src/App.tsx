@@ -292,6 +292,23 @@ function App() {
     }
   };
 
+  const handleEnterAR = async () => {
+    try {
+      if (!navigator.xr) {
+        alert("WebXR is not available in this browser. Ensure you are using Chrome on Android and the site is loaded over HTTPS.");
+        return;
+      }
+      const supported = await navigator.xr.isSessionSupported('immersive-ar');
+      if (!supported) {
+        alert("AR (immersive-ar) is not supported on this device/browser.");
+        return;
+      }
+      await store.enterAR();
+    } catch (error: any) {
+      alert("Failed to enter AR: " + (error.message || error));
+    }
+  };
+
   return (
     <div 
       className="flex h-[100dvh] w-full bg-dark-900 text-gray-100 overflow-hidden relative"
@@ -383,7 +400,7 @@ function App() {
         )}
 
         <button
-          onClick={() => store.enterAR()}
+          onClick={handleEnterAR}
           className="absolute bottom-4 left-4 z-50 bg-primary-600 hover:bg-primary-500 text-white font-bold h-14 px-6 rounded-full shadow-lg flex items-center gap-2 transition-colors"
         >
           <BoxSelect className="w-5 h-5" />
