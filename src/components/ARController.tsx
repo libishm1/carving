@@ -21,30 +21,6 @@ interface ARControllerProps {
   arMode: 'none' | 'webxr_dom' | 'webxr_basic' | 'html5';
 }
 
-export const ARController: React.FC<ARControllerProps> = ({ 
-  blockMeshRef, 
-  onPlaceModel,
-  registrationStep,
-  setRegistrationStep,
-  registrationPoints,
-  setRegistrationPoints,
-  onRegistrationComplete,
-  digitalPins,
-  onFiducialRegistrationComplete,
-  arMode
-}) => {
-  const { camera } = useThree();
-  const [physicalHitPoint, setPhysicalHitPoint] = useState<THREE.Vector3 | null>(null);
-  const [drillDepth, setDrillDepth] = useState<number | null>(null);
-  const [isPlaced, setIsPlaced] = useState(false);
-  const hitMeshRef = useRef<THREE.Mesh>(null);
-
-  useEffect(() => {
-    if (arMode === 'html5' && !physicalHitPoint) {
-      setPhysicalHitPoint(new THREE.Vector3(0, 0, -1));
-    }
-  }, [arMode, physicalHitPoint]);
-
 const WebXRHitTester = ({ camera, hitMeshRef, isPlaced, blockMeshRef, setPhysicalHitPoint, setDrillDepth }: any) => {
   // Perform continuous hit-test against the physical environment
   useXRHitTest((results: any[], getWorldMatrix: any) => {
@@ -90,6 +66,31 @@ const WebXRHitTester = ({ camera, hitMeshRef, isPlaced, blockMeshRef, setPhysica
 
   return null;
 };
+
+export const ARController: React.FC<ARControllerProps> = ({ 
+  blockMeshRef, 
+  onPlaceModel,
+  registrationStep,
+  setRegistrationStep,
+  registrationPoints,
+  setRegistrationPoints,
+  onRegistrationComplete,
+  digitalPins,
+  onFiducialRegistrationComplete,
+  arMode
+}) => {
+  const { camera } = useThree();
+  const [physicalHitPoint, setPhysicalHitPoint] = useState<THREE.Vector3 | null>(null);
+  const [drillDepth, setDrillDepth] = useState<number | null>(null);
+  const [isPlaced, setIsPlaced] = useState(false);
+  const hitMeshRef = useRef<THREE.Mesh>(null);
+
+  useEffect(() => {
+    if (arMode === 'html5' && !physicalHitPoint) {
+      setPhysicalHitPoint(new THREE.Vector3(0, 0, -1));
+    }
+  }, [arMode, physicalHitPoint]);
+
 
   useFrame(() => {
     if (arMode === 'html5' && hitMeshRef.current && camera && (!isPlaced || registrationStep !== 'idle')) {
