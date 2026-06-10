@@ -15,6 +15,11 @@ export const store = createXRStore();
 const DynamicBlock = ({ size, onLoaded }: { size: [number, number, number], onLoaded: (box: THREE.Box3, size: [number, number, number], root: THREE.Object3D) => void }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   
+  const onLoadedRef = useRef(onLoaded);
+  useEffect(() => {
+    onLoadedRef.current = onLoaded;
+  }, [onLoaded]);
+
   useEffect(() => {
     if (meshRef.current) {
       if (!(meshRef.current.geometry as any).boundsTree) {
@@ -22,9 +27,9 @@ const DynamicBlock = ({ size, onLoaded }: { size: [number, number, number], onLo
       }
       meshRef.current.geometry.computeBoundingBox();
       const box = meshRef.current.geometry.boundingBox!;
-      onLoaded(box, size, meshRef.current);
+      if (onLoadedRef.current) onLoadedRef.current(box, size, meshRef.current);
     }
-  }, [size, onLoaded]);
+  }, [size]);
 
   return (
     <mesh ref={meshRef}>
@@ -195,8 +200,21 @@ function App() {
     const center = new THREE.Vector3();
     box.getCenter(center);
     
-    setSculptureSize([size.x, size.y, size.z]);
-    setSculptureCenter([center.x, center.y, center.z]);
+    if (
+      size.x !== sculptureSize[0] || 
+      size.y !== sculptureSize[1] || 
+      size.z !== sculptureSize[2]
+    ) {
+      setSculptureSize([size.x, size.y, size.z]);
+    }
+    
+    if (
+      center.x !== sculptureCenter[0] || 
+      center.y !== sculptureCenter[1] || 
+      center.z !== sculptureCenter[2]
+    ) {
+      setSculptureCenter([center.x, center.y, center.z]);
+    }
   };
 
   const scaleFactorScalar = scaleFactors[0];

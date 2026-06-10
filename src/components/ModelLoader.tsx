@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { Rhino3dmLoader } from 'three/examples/jsm/loaders/3DMLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
@@ -57,11 +57,16 @@ function processObject(
     };
   }, [object]);
 
+  const onLoadedRef = React.useRef(props.onLoaded);
   useEffect(() => {
-    if (props.onLoaded && boundingBox && size && finalObject) {
-      props.onLoaded(boundingBox, size, finalObject);
+    onLoadedRef.current = props.onLoaded;
+  }, [props.onLoaded]);
+
+  useEffect(() => {
+    if (onLoadedRef.current && boundingBox && size && finalObject) {
+      onLoadedRef.current(boundingBox, size, finalObject);
     }
-  }, [boundingBox, size, finalObject, props.onLoaded]);
+  }, [boundingBox, size, finalObject]);
 
   // Apply material override and compute BVH
   useMemo(() => {
