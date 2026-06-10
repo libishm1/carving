@@ -106,36 +106,43 @@ function App() {
   }, [isCarvingMode]);
 
   // Calculate scaling and fit
+  const appliedScaleRef = useRef<number>(1);
+
   const { scaleFactors, fitResult, currentSize } = useMemo(() => {
-    let factors: [number, number, number] = [1, 1, 1];
+    let factor = 1;
+    const currentScale = appliedScaleRef.current;
     
     if (mode === 'multiplier') {
-      factors = [value, value, value];
+      factor = value;
     } else if (mode === 'target_longest') {
       const longest = Math.max(...sculptureSize);
-      const ratio = longest > 0 ? value / longest : 1;
-      factors = [ratio, ratio, ratio];
+      if (longest > 0) factor = currentScale * (value / longest);
+      else factor = currentScale;
     } else if (mode === 'target_x') {
-      const ratio = sculptureSize[0] > 0 ? value / sculptureSize[0] : 1;
-      factors = [ratio, ratio, ratio];
+      if (sculptureSize[0] > 0) factor = currentScale * (value / sculptureSize[0]);
+      else factor = currentScale;
     } else if (mode === 'target_y') {
-      const ratio = sculptureSize[1] > 0 ? value / sculptureSize[1] : 1;
-      factors = [ratio, ratio, ratio];
+      if (sculptureSize[1] > 0) factor = currentScale * (value / sculptureSize[1]);
+      else factor = currentScale;
     } else if (mode === 'target_z') {
-      const ratio = sculptureSize[2] > 0 ? value / sculptureSize[2] : 1;
-      factors = [ratio, ratio, ratio];
+      if (sculptureSize[2] > 0) factor = currentScale * (value / sculptureSize[2]);
+      else factor = currentScale;
     } else if (mode === 'fit') {
       const ratioX = customStockSize[0] / (sculptureSize[0] || 1);
       const ratioY = customStockSize[1] / (sculptureSize[1] || 1);
       const ratioZ = customStockSize[2] / (sculptureSize[2] || 1);
-      const minRatio = Math.min(ratioX, ratioY, ratioZ);
-      factors = [minRatio, minRatio, minRatio];
+      factor = currentScale * Math.min(ratioX, ratioY, ratioZ);
     }
 
+    if (!isFinite(factor) || factor <= 0) factor = 1;
+    appliedScaleRef.current = factor;
+
+    const factors: [number, number, number] = [factor, factor, factor];
+
     const scaledExtents: [number, number, number] = [
-      sculptureSize[0] * factors[0],
-      sculptureSize[1] * factors[1],
-      sculptureSize[2] * factors[2]
+      sculptureSize[0],
+      sculptureSize[1],
+      sculptureSize[2]
     ];
 
     return { scaleFactors: factors, fitResult: null as { fits: boolean, clearance: number[] } | null, currentSize: scaledExtents };
@@ -155,6 +162,8 @@ function App() {
 
   const updateBoundingBox = () => {
     if (!transformGroupRef.current || !mainGroupRef.current) return;
+    
+    mainGroupRef.current.updateMatrixWorld(true);
     
     const box = new THREE.Box3();
     const invMainMatrix = mainGroupRef.current.matrixWorld.clone().invert();
@@ -183,6 +192,14 @@ function App() {
     setSculptureSize([size.x, size.y, size.z]);
     setSculptureCenter([center.x, center.y, center.z]);
   };
+
+  const scaleFactorScalar = scaleFactors[0];
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateBoundingBox();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [scaleFactorScalar, margin, stockMode]);
 
   // Compute the carving normal in mainGroupRef's local space
   const mainCarvingNormal = useMemo(() => {
@@ -506,7 +523,7 @@ function App() {
                   <TransformControls 
                     object={transformGroupRef.current} 
                     mode={transformMode} 
-                    onMouseUp={updateBoundingBox}
+                    onChange={updateBoundingBox}
                   />
                 )}
               </Suspense>
