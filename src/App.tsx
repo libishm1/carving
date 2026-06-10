@@ -1,4 +1,4 @@
-import { useState, useMemo, Suspense, useRef, useEffect } from 'react';
+import { useState, useMemo, Suspense, useRef, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, ContactShadows, Grid, TransformControls, Html } from '@react-three/drei';
 import { XR, createXRStore } from '@react-three/xr';
@@ -71,8 +71,6 @@ function App() {
   const [isPinningMode, setIsPinningMode] = useState<boolean>(false);
   const [digitalPins, setDigitalPins] = useState<THREE.Vector3[]>([]);
 
-  const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
-  const [sculptureCenter, setSculptureCenter] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
   const [blockMeshRef, setBlockMeshRef] = useState<THREE.Object3D | null>(null);
   const dynamicBlockRef = useRef<THREE.Object3D | null>(null);
@@ -81,11 +79,6 @@ function App() {
   const [selectedMaquettePoint, setSelectedMaquettePoint] = useState<THREE.Vector3 | null>(null);
   const [selectedBlockPoint, setSelectedBlockPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
-
-  // Handle Model Loading
-  const handleSculptureLoaded = (_box: THREE.Box3, size: [number, number, number]) => {
-    setSculptureSize(size);
-  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -242,16 +235,19 @@ function App() {
       return;
     }
 
-    if (!isCarvingMode || !transformGroupRef.current) return;
-    if (!worldNormal) return;
+    if (!transformGroupRef.current) return;
+    
+    if (isCarvingMode) {
+      if (!worldNormal) return;
 
-    const invMatrix = transformGroupRef.current.matrixWorld.clone().invert();
-    const localNormal = worldNormal.clone().transformDirection(invMatrix).normalize();
+      const invMatrix = transformGroupRef.current.matrixWorld.clone().invert();
+      const localNormal = worldNormal.clone().transformDirection(invMatrix).normalize();
 
-    if (isSelectingFace) {
-      setCarvingNormal(localNormal);
-      setIsSelectingFace(false);
-      return;
+      if (isSelectingFace) {
+        setCarvingNormal(localNormal);
+        setIsSelectingFace(false);
+        return;
+      }
     }
 
     setSelectedMaquettePoint(point);
