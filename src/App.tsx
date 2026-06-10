@@ -346,8 +346,8 @@ function App() {
         </button>
 
         {/* Transform Tools Overlay */}
-        {!isSidebarOpen && !isCarvingMode && (
-          <div className="absolute top-20 left-4 z-40 bg-dark-900/90 border border-dark-600 rounded-xl shadow-2xl p-2 flex flex-col gap-2">
+        {!isCarvingMode && (
+          <div className={`absolute top-20 left-4 z-40 bg-dark-900/90 border border-dark-600 rounded-xl shadow-2xl p-2 flex flex-col gap-2 transition-opacity ${isSidebarOpen ? 'opacity-0 md:opacity-100 pointer-events-none md:pointer-events-auto' : 'opacity-100'}`}>
             <button title="Translate" onClick={() => setTransformMode(m => m === 'translate' ? 'none' : 'translate')} className={`p-3 rounded-lg transition-colors ${transformMode === 'translate' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
               <Move className="w-5 h-5" />
             </button>
@@ -360,13 +360,39 @@ function App() {
           </div>
         )}
 
-        {/* Pinning Instructions */}
-        {isPinningMode && digitalPins.length < 3 && (
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
-            <div className="bg-red-900/90 border border-red-500 backdrop-blur-xl px-6 py-3 rounded-2xl shadow-2xl text-center">
-              <div className="text-white font-bold animate-pulse">
-                Click the 3D model to place Pin {digitalPins.length + 1} of 3
-              </div>
+        {/* Pinning Instructions - Step by Step Bubbles */}
+        {isPinningMode && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 w-[95%] md:w-auto transition-all animate-bounce">
+            <div className="bg-primary-900/95 border-2 border-primary-500 backdrop-blur-xl px-6 py-4 rounded-3xl shadow-2xl text-center relative">
+              {digitalPins.length < 3 ? (
+                <>
+                  <div className="text-primary-300 font-bold text-sm uppercase tracking-widest mb-1">
+                    Step {digitalPins.length + 1} of 3
+                  </div>
+                  <div className="text-white font-bold text-lg">
+                    {digitalPins.length === 0 && "Tap anywhere on the 3D model to place the first reference pin."}
+                    {digitalPins.length === 1 && "Tap a second spot. Try to pick a visually distinct feature."}
+                    {digitalPins.length === 2 && "Tap a third spot to complete the triangle. Keep them spread apart!"}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-green-400 font-bold text-sm uppercase tracking-widest mb-1">
+                    Success!
+                  </div>
+                  <div className="text-white font-bold text-lg mb-3">
+                    3 Pins Placed. You are ready to map the physical stone.
+                  </div>
+                  <button 
+                    onClick={() => setIsPinningMode(false)}
+                    className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-full w-full transition-colors"
+                  >
+                    Got it
+                  </button>
+                </>
+              )}
+              {/* Speech bubble tail */}
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-primary-900 border-b-2 border-r-2 border-primary-500 transform rotate-45"></div>
             </div>
           </div>
         )}
@@ -621,7 +647,11 @@ function App() {
                 To use the 3-Point AR Registration, you must first define 3 digital datums on the 3D model.
               </div>
               <button 
-                onClick={() => { setIsPinningMode(!isPinningMode); setTransformMode('none'); }}
+                onClick={() => { 
+                  setIsPinningMode(!isPinningMode); 
+                  setTransformMode('none'); 
+                  if (!isPinningMode) setIsSidebarOpen(false); // Auto-close sidebar to show the model
+                }}
                 className={`w-full py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors ${isPinningMode ? 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-dark-700 text-gray-300 hover:bg-dark-600 hover:text-white'}`}
               >
                 <MapPin className="w-5 h-5" />
