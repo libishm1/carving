@@ -45,9 +45,9 @@ export const ARController: React.FC<ARControllerProps> = ({
     }
   }, [arMode, physicalHitPoint]);
 
+const WebXRHitTester = ({ camera, hitMeshRef, isPlaced, blockMeshRef, setPhysicalHitPoint, setDrillDepth }: any) => {
   // Perform continuous hit-test against the physical environment
   useXRHitTest((results: any[], getWorldMatrix: any) => {
-    if (arMode === 'html5') return;
     if (results.length === 0) return;
     
     const hitMatrix = getWorldMatrix(results[0]);
@@ -80,7 +80,6 @@ export const ARController: React.FC<ARControllerProps> = ({
       const physicalDist = cameraPos.distanceTo(physicalPoint);
 
       // The drill depth is the difference between the physical surface and the digital surface
-      // If digital is further away, we need to carve into the physical surface.
       // Convert to mm (assuming units are meters in WebXR)
       const depth = (digitalDist - physicalDist) * 1000;
       setDrillDepth(depth);
@@ -88,6 +87,9 @@ export const ARController: React.FC<ARControllerProps> = ({
       setDrillDepth(null);
     }
   }, "viewer");
+
+  return null;
+};
 
   useFrame(() => {
     if (arMode === 'html5' && hitMeshRef.current && camera && (!isPlaced || registrationStep !== 'idle')) {
@@ -138,7 +140,18 @@ export const ARController: React.FC<ARControllerProps> = ({
   );
 
   return (
-    <mesh ref={hitMeshRef}>
+    <>
+      {arMode !== 'html5' && (
+        <WebXRHitTester 
+          camera={camera} 
+          hitMeshRef={hitMeshRef} 
+          isPlaced={isPlaced} 
+          blockMeshRef={blockMeshRef} 
+          setPhysicalHitPoint={setPhysicalHitPoint} 
+          setDrillDepth={setDrillDepth} 
+        />
+      )}
+      <mesh ref={hitMeshRef}>
       <sphereGeometry args={[0.02, 16, 16]} />
       <meshStandardMaterial color={isPlaced ? "#ef4444" : "#4ade80"} emissive={isPlaced ? "#ef4444" : "#4ade80"} emissiveIntensity={0.8} />
       
@@ -254,5 +267,6 @@ export const ARController: React.FC<ARControllerProps> = ({
         )
       )}
     </mesh>
+    </>
   );
 };
