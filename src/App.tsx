@@ -357,10 +357,6 @@ function App() {
             <button title="Scale" onClick={() => setTransformMode(m => m === 'scale' ? 'none' : 'scale')} className={`p-3 rounded-lg transition-colors ${transformMode === 'scale' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
               <Scaling className="w-5 h-5" />
             </button>
-            <div className="h-px bg-dark-700 my-1 mx-2"></div>
-            <button title="Place Digital Pins" onClick={() => { setIsPinningMode(!isPinningMode); setTransformMode('none'); }} className={`p-3 rounded-lg transition-colors ${isPinningMode ? 'bg-red-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
-              <MapPin className="w-5 h-5" />
-            </button>
           </div>
         )}
 
@@ -615,6 +611,33 @@ function App() {
               </div>
             </div>
           )}
+
+          <div className="mb-6 pb-6 border-b border-dark-600 space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">AR Registration Workflow</span>
+            </div>
+            <div className="bg-dark-900 p-4 rounded-xl border border-dark-600">
+              <div className="text-sm text-gray-400 mb-3 leading-relaxed">
+                To use the 3-Point AR Registration, you must first define 3 digital datums on the 3D model.
+              </div>
+              <button 
+                onClick={() => { setIsPinningMode(!isPinningMode); setTransformMode('none'); }}
+                className={`w-full py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors ${isPinningMode ? 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-dark-700 text-gray-300 hover:bg-dark-600 hover:text-white'}`}
+              >
+                <MapPin className="w-5 h-5" />
+                {isPinningMode ? `Placing Pins (${digitalPins.length}/3)` : 'Place 3 Digital Pins'}
+              </button>
+              {digitalPins.length > 0 && (
+                <button 
+                  onClick={() => setDigitalPins([])}
+                  className="w-full mt-2 py-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Clear Pins
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="mb-6 pb-6 border-b border-dark-600">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Stock Block</span>
