@@ -81,7 +81,7 @@ export const ARController: React.FC<ARControllerProps> = ({
     } else {
       setDrillDepth(null);
     }
-  });
+  }, "viewer");
 
   useFrame(() => {
     if (arMode === 'html5' && hitMeshRef.current && camera && (!isPlaced || registrationStep !== 'idle')) {
