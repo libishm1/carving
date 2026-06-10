@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { useXRHitTest } from '@react-three/xr';
 import { Html, Billboard, Text } from '@react-three/drei';
@@ -38,6 +38,12 @@ export const ARController: React.FC<ARControllerProps> = ({
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
   const [isPlaced, setIsPlaced] = useState(false);
   const hitMeshRef = useRef<THREE.Mesh>(null);
+
+  useEffect(() => {
+    if (arMode === 'html5' && !physicalHitPoint) {
+      setPhysicalHitPoint(new THREE.Vector3(0, 0, -1));
+    }
+  }, [arMode, physicalHitPoint]);
 
   // Perform continuous hit-test against the physical environment
   useXRHitTest((results: any[], getWorldMatrix: any) => {
