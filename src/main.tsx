@@ -1,3 +1,4 @@
+/// <reference types="vite-plugin-pwa/client" />
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -8,7 +9,7 @@ import * as THREE from 'three';
 
 // Check for PWA service worker updates every 1 minute
 registerSW({
-  onRegistered(r) {
+  onRegistered(r: ServiceWorkerRegistration | undefined) {
     r && setInterval(() => { r.update() }, 60 * 1000)
   }
 });
