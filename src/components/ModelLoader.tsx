@@ -96,6 +96,7 @@ function processObject(
       object={finalObject} 
       scale={props.scale} 
       position={props.position} 
+      dispose={null}
       onClick={props.onPointerClick ? (e: any) => {
         e.stopPropagation?.();
         let normal = undefined;

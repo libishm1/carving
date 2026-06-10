@@ -131,7 +131,7 @@ export const TweenMesh = ({
   }, [geometryData, tweenValue, carvingNormal]);
 
   return (
-    <mesh ref={meshRef} geometry={geometryData?.baseGeometry || undefined}>
+    <mesh ref={meshRef} geometry={geometryData?.baseGeometry || undefined} dispose={null}>
       {geometryData?.baseGeometry && (
         <meshStandardMaterial 
           color="#ffffff" 
