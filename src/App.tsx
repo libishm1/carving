@@ -68,10 +68,12 @@ function App() {
   const [digitalPins, setDigitalPins] = useState<THREE.Vector3[]>([]);
 
   const [sculptureSize, setSculptureSize] = useState<[number, number, number]>([0, 0, 0]);
+  const [sculptureCenter, setSculptureCenter] = useState<[number, number, number]>([0, 0, 0]);
   const [maquetteMeshRef, setMaquetteMeshRef] = useState<THREE.Mesh | null>(null);
   const [blockMeshRef, setBlockMeshRef] = useState<THREE.Object3D | null>(null);
   const dynamicBlockRef = useRef<THREE.Object3D | null>(null);
   const mainGroupRef = useRef<THREE.Group>(null);
+  const transformGroupRef = useRef<THREE.Group>(null);
   const [selectedMaquettePoint, setSelectedMaquettePoint] = useState<THREE.Vector3 | null>(null);
   const [selectedBlockPoint, setSelectedBlockPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
@@ -137,39 +139,59 @@ function App() {
       sculptureSize[2] * factors[2]
     ];
 
-    let stock = customStockSize;
-    if (stockMode === 'auto') {
-      stock = [
-        scaledExtents[0] + margin * 2,
-        scaledExtents[1] + margin * 2,
-        scaledExtents[2] + margin * 2
+    return { scaleFactors: factors, fitResult: null, currentSize: scaledExtents };
+  }, [sculptureSize, customStockSize, mode, value]);
+
+  const effectiveStock: [number, number, number] = useMemo(() => {
+    if (stockMode === 'custom') {
+      return customStockSize;
+    } else {
+      return [
+        sculptureSize[0] + (margin * 2),
+        sculptureSize[1] + (margin * 2),
+        sculptureSize[2] + (margin * 2)
       ];
     }
+  }, [stockMode, sculptureSize, margin, customStockSize]);
 
-    const clearance = [
-      stock[0] - scaledExtents[0],
-      stock[1] - scaledExtents[1],
-      stock[2] - scaledExtents[2]
-    ];
+  const updateBoundingBox = () => {
+    if (!transformGroupRef.current || !mainGroupRef.current) return;
     
-    // Add small epsilon for floating point inaccuracies
-    const fits = clearance.every(c => c >= margin * 2 - 0.001);
+    const box = new THREE.Box3();
+    const invMainMatrix = mainGroupRef.current.matrixWorld.clone().invert();
+    
+    transformGroupRef.current.traverse((child: any) => {
+      if (child.isMesh && child.geometry) {
+        if (!child.geometry.boundingBox) {
+          child.geometry.computeBoundingBox();
+        }
+        
+        const childToMain = invMainMatrix.clone().multiply(child.matrixWorld);
+        const childBox = child.geometry.boundingBox.clone();
+        childBox.applyMatrix4(childToMain);
+        box.union(childBox);
+      }
+    });
+    
+    if (box.isEmpty()) return;
 
-    const baseRatios = [
-      stock[0] / (sculptureSize[0] || 1),
-      stock[1] / (sculptureSize[1] || 1),
-      stock[2] / (sculptureSize[2] || 1)
-    ];
-    const maxScaleToFit = Math.min(...baseRatios);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    
+    setSculptureSize([size.x, size.y, size.z]);
+    setSculptureCenter([center.x, center.y, center.z]);
+  };
 
-    const fit = {
-      fits,
-      clearance,
-      maxScaleToFit
-    };
-
-    return { scaleFactors: factors, fitResult: fit, currentSize: scaledExtents, effectiveStock: stock };
-  }, [sculptureSize, customStockSize, stockMode, mode, value, margin]);
+  // Compute the carving normal in mainGroupRef's local space
+  const mainCarvingNormal = useMemo(() => {
+    if (!transformGroupRef.current || !mainGroupRef.current) return carvingNormal;
+    const worldNormal = carvingNormal.clone().transformDirection(transformGroupRef.current.matrixWorld).normalize();
+    const invMainMatrix = mainGroupRef.current.matrixWorld.clone().invert();
+    return worldNormal.transformDirection(invMainMatrix).normalize();
+  }, [carvingNormal, sculptureSize]); // Recalculate when bounding box changes
 
   // Carving Simulation Max Depth
   const { maxCarvingDepth } = useMemo(() => {
@@ -178,41 +200,49 @@ function App() {
     const hz = effectiveStock[2] / 2;
     
     // Find the extremum of the block in the direction of the carving normal
-    const maxProj = Math.abs(carvingNormal.x) * hx + Math.abs(carvingNormal.y) * hy + Math.abs(carvingNormal.z) * hz;
+    const maxProj = Math.abs(mainCarvingNormal.x) * hx + Math.abs(mainCarvingNormal.y) * hy + Math.abs(mainCarvingNormal.z) * hz;
     
     return {
       maxCarvingDepth: maxProj * 2
     };
-  }, [effectiveStock, carvingNormal]);
+  }, [effectiveStock, mainCarvingNormal]);
 
   // Unified Snapping Logic
-  const updateSnapping = (maquettePt: THREE.Vector3, meshRefToUse: THREE.Object3D | null) => {
-    if (!meshRefToUse) return;
+  const updateSnapping = (maquettePoint: THREE.Vector3, blockMesh: THREE.Object3D | null) => {
+    if (!blockMesh || !transformGroupRef.current) return;
     
+    // The carvingNormal is stored in local space of transformGroupRef.
+    // We must convert it to world space for the raycaster!
+    const worldNormal = carvingNormal.clone().transformDirection(transformGroupRef.current.matrixWorld).normalize();
+    
+    const raycaster = new THREE.Raycaster();
+
     if (isCarvingMode) {
-      const raycaster = new THREE.Raycaster();
-      const dir = carvingNormal.clone().normalize();
-      raycaster.set(maquettePt, dir);
+      // Raycast OUTWARDS from the model towards the TweenMesh block surface
+      const dir = worldNormal.clone();
+      // Start slightly inside the model so we don't miss anything
+      const origin = maquettePoint.clone().add(worldNormal.clone().multiplyScalar(-0.01));
+      raycaster.set(origin, dir);
       
-      const hits = raycaster.intersectObject(meshRefToUse, true);
+      const hits = raycaster.intersectObject(blockMesh, true);
       
       if (hits.length > 0) {
         setSelectedBlockPoint(hits[0].point);
-        setDrillDepth(hits[0].distance);
+        setDrillDepth(hits[0].distance - 0.01);
       }
     } else {
-      let closestPointWorld = maquettePt.clone();
+      let closestPointWorld = maquettePoint.clone();
       let minDistance = Infinity;
   
-      meshRefToUse.traverse((child: any) => {
+      blockMesh.traverse((child: any) => {
         if (child instanceof THREE.Mesh && child.geometry.boundsTree) {
           const inverseMatrix = new THREE.Matrix4().copy(child.matrixWorld).invert();
-          const localPoint = maquettePt.clone().applyMatrix4(inverseMatrix);
+          const localPoint = maquettePoint.clone().applyMatrix4(inverseMatrix);
           
           const res = child.geometry.boundsTree.closestPointToPoint(localPoint, {});
           if (res && res.point) {
             const worldPt = res.point.clone().applyMatrix4(child.matrixWorld);
-            const dist = worldPt.distanceTo(maquettePt);
+            const dist = worldPt.distanceTo(maquettePoint);
             if (dist < minDistance) {
               minDistance = dist;
               closestPointWorld = worldPt;
@@ -243,10 +273,9 @@ function App() {
   }, [isCarvingMode, blockMeshRef, carvingNormal]);
 
   // Handle Maquette Clicks
-  const handleMaquetteClick = (e: any) => {
-    e.stopPropagation();
+  const handleMaquetteClick = (point: THREE.Vector3, worldNormal?: THREE.Vector3) => {
     if (isPinningMode && mainGroupRef.current) {
-      const localPoint = e.point.clone();
+      const localPoint = point.clone();
       mainGroupRef.current.worldToLocal(localPoint);
       setDigitalPins(prev => {
         if (prev.length >= 3) return [localPoint]; 
@@ -255,12 +284,16 @@ function App() {
       return;
     }
 
-    if (!isCarvingMode) return;
-    const { point, face } = e;
-    const normal = face?.normal.clone().applyQuaternion(e.object.quaternion);
+    if (!isCarvingMode || !transformGroupRef.current) return;
+    
+    if (!worldNormal) return;
 
-    if (isSelectingFace && normal) {
-      setCarvingNormal(normal);
+    // Convert the world normal to the LOCAL space of the transformGroupRef
+    const invMatrix = transformGroupRef.current.matrixWorld.clone().invert();
+    const localNormal = worldNormal.clone().transformDirection(invMatrix).normalize();
+
+    if (isSelectingFace) {
+      setCarvingNormal(localNormal);
       setIsSelectingFace(false);
       return;
     }
@@ -371,26 +404,6 @@ function App() {
             </div>
           </div>
         )}
-        {/* Prominent Carving Slider */}
-        {isCarvingMode && (
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-md bg-dark-900/90 border border-dark-600 backdrop-blur-xl p-4 rounded-2xl shadow-2xl">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-bold text-gray-300">Carving Depth</span>
-              <span className="text-xs font-mono text-primary-400 bg-primary-500/10 px-2 py-1 rounded">
-                {carvingDepth.toFixed(2)} / {maxCarvingDepth.toFixed(2)}
-              </span>
-            </div>
-            <input 
-              type="range"
-              min="0"
-              max={maxCarvingDepth}
-              step="0.01"
-              value={carvingDepth}
-              onChange={(e) => setCarvingDepth(Number(e.target.value))}
-              className="w-full h-2 bg-dark-600 rounded-lg appearance-none cursor-pointer accent-primary-500"
-            />
-          </div>
-        )}
 
         <button
           onClick={() => store.enterAR()}
@@ -402,10 +415,11 @@ function App() {
         <Canvas camera={{ position: [2, 2, 2], fov: 45 }} gl={{ localClippingEnabled: true }}>
           <XR store={store}>
             <color attach="background" args={['#121212']} />
-            <ambientLight intensity={0.5} />
-          <directionalLight position={[10, 10, 10]} intensity={1} />
-          <Environment preset="city" />
-          <OrbitControls makeDefault />
+            <ambientLight intensity={0.4} />
+            <hemisphereLight intensity={0.6} color="#ffffff" groundColor="#444444" />
+            <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
+            <directionalLight position={[-10, 5, -10]} intensity={0.5} />
+            <OrbitControls makeDefault />
           
           <ARController 
             blockMeshRef={blockMeshRef} 
@@ -424,10 +438,6 @@ function App() {
             digitalPins={digitalPins}
             onFiducialRegistrationComplete={(physicalPoints) => {
               try {
-                // The digitalPins were recorded in world space, but we are about to apply a matrix 
-                // to the group that will redefine world space.
-                // Wait, if the model hasn't been transformed yet, the digital pins ARE in the local
-                // un-transformed space of the model!
                 const matrix = calculateTriangleRegistration(digitalPins, physicalPoints);
                 setRegistrationMatrix(matrix);
                 setArScale(1);
@@ -450,7 +460,40 @@ function App() {
             rotation={registrationMatrix ? undefined : [0, arRotation, 0]}
           >
             <group position={registrationMatrix ? [effectiveStock[0]/2, effectiveStock[1]/2, -effectiveStock[2]/2] : [0,0,0]}>
-              <Suspense fallback={null}>
+              <Suspense fallback={<Html><div className="text-white">Loading...</div></Html>}>
+                
+                <group ref={transformGroupRef}>
+                  {/* The Real Mesh */}
+                  <Model
+                    url={modelUrl}
+                    extension={modelExt}
+                    color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"}
+                    scale={scaleFactors}
+                    onPointerClick={handleMaquetteClick}
+                    onLoaded={(box, size, root) => {
+                      handleSculptureLoaded(box, size);
+                      if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
+                      else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
+                      // Initialize bounding box logic
+                      setTimeout(updateBoundingBox, 100);
+                    }}
+                  />
+                </group>
+
+                {/* Transform Controls */}
+                {transformMode !== 'none' && transformGroupRef.current && !isCarvingMode && (
+                  <TransformControls 
+                    object={transformGroupRef.current} 
+                    mode={transformMode} 
+                    onMouseUp={updateBoundingBox}
+                  />
+                )}
+              </Suspense>
+            </group>
+            
+            {/* Dynamic Stock Block ghost */}
+            {!isCarvingMode && effectiveStock[0] > 0 && (
+              <group position={sculptureCenter}>
                 <DynamicBlock 
                   size={effectiveStock} 
                   onLoaded={(_box, _size, root) => {
@@ -458,66 +501,28 @@ function App() {
                     if (!isCarvingMode) setBlockMeshRef(root);
                   }} 
                 />
-                
-                {/* The Real Mesh with TransformControls */}
-              {transformMode !== 'none' ? (
-                <TransformControls mode={transformMode}>
-                  <Model 
-                    url={modelUrl} 
-                    extension={modelExt}
-                    color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
-                    scale={scaleFactors}
-                    clippingPlanes={[]}
-                    polygonOffset={true}
-                    polygonOffsetFactor={2}
-                    polygonOffsetUnits={2}
-                    onLoaded={(_box, _size, root) => {
-                      handleSculptureLoaded(_box, _size);
-                      if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
-                      else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
-                    }}
-                    onPointerClick={handleMaquetteClick}
-                  />
-                </TransformControls>
-              ) : (
-                <Model 
-                  url={modelUrl} 
-                  extension={modelExt}
-                  color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"} 
-                  scale={scaleFactors}
-                  clippingPlanes={[]}
-                  polygonOffset={true}
-                  polygonOffsetFactor={2}
-                  polygonOffsetUnits={2}
-                  onLoaded={(_box, _size, root) => {
-                    handleSculptureLoaded(_box, _size);
-                    if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
-                    else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
-                  }}
-                  onPointerClick={handleMaquetteClick}
-                />
-              )}
+              </group>
+            )}
 
-              {/* The Tween Simulation Mesh */}
-              {isCarvingMode && maquetteMeshRef && (
+            {/* Tween Mesh ghost */}
+            {isCarvingMode && maquetteMeshRef && effectiveStock[0] > 0 && (
+              <group position={sculptureCenter}>
                 <TweenMesh
                   stockSize={effectiveStock}
                   scaleFactors={scaleFactors}
-                  carvingNormal={carvingNormal}
+                  carvingNormal={mainCarvingNormal}
                   maquetteMesh={maquetteMeshRef}
                   tweenValue={maxCarvingDepth > 0 ? (carvingDepth / maxCarvingDepth) : 0}
                   onLoaded={(mesh) => {
-                    // Update raycaster to snap dynamically to this surface!
                     setBlockMeshRef(mesh);
                   }}
                   onUpdate={() => {
-                    // Recalculate the pointing device drill depth in real-time as the slider moves!
                     recalculatePointing();
                   }}
                 />
-              )}
-            </Suspense>
-            </group>
+              </group>
+            )}
+
             <ContactShadows resolution={512} scale={10} blur={2} opacity={0.5} far={10} color="#000000" />
             
             {/* Render Digital Pins so they stick to the model even when rotated */}
@@ -659,30 +664,48 @@ function App() {
           </div>
 
           <div className="mb-6 pb-6 border-b border-dark-600 space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold flex items-center">
-                Carving Simulation
-              </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Carving Simulation</label>
               <button 
-                onClick={() => setIsCarvingMode(!isCarvingMode)}
-                className={`w-12 h-6 rounded-full transition-colors relative ${isCarvingMode ? 'bg-primary-500' : 'bg-dark-600'}`}
+                onClick={() => {
+                  const nextMode = !isCarvingMode;
+                  setIsCarvingMode(nextMode);
+                  if (nextMode) setTransformMode('none');
+                }}
+                className={`w-10 h-5 rounded-full transition-colors relative ${isCarvingMode ? 'bg-primary-600' : 'bg-dark-600'}`}
               >
-                <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${isCarvingMode ? 'left-7' : 'left-1'}`} />
+                <div className={`w-3 h-3 rounded-full bg-white absolute top-1 transition-transform ${isCarvingMode ? 'left-6' : 'left-1'}`} />
               </button>
             </div>
 
             {isCarvingMode && (
-              <>
+              <div className="mt-4 space-y-4">
                 <button 
                   onClick={() => setIsSelectingFace(!isSelectingFace)}
-                  className={`w-full p-3 h-12 text-sm font-bold rounded-lg flex items-center justify-center mb-2 transition-colors ${isSelectingFace ? 'bg-primary-500 text-white animate-pulse' : 'bg-dark-700 text-gray-300 hover:bg-dark-600'}`}
+                  className={`w-full py-2 px-4 rounded text-sm font-bold transition-colors ${isSelectingFace ? 'bg-primary-600 text-white animate-pulse' : 'bg-dark-700 text-gray-300 hover:bg-dark-600'}`}
                 >
-                  {isSelectingFace ? 'Select Face on Mesh...' : 'Set Carving Direction'}
+                  {isSelectingFace ? 'Click on 3D Model...' : 'Set Carving Direction'}
                 </button>
-                <p className="text-xs text-gray-500 text-center">
-                  Adjust carving depth using the main slider.
-                </p>
-              </>
+                
+                <div className="bg-dark-900 p-4 rounded-xl border border-dark-600 shadow-inner mt-2">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-white font-bold text-sm">Carving Depth</span>
+                    <span className="bg-dark-700 text-primary-400 font-mono text-xs px-2 py-1 rounded">
+                      {carvingDepth.toFixed(2)} / {maxCarvingDepth.toFixed(2)}
+                    </span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max={maxCarvingDepth} 
+                    step="0.01" 
+                    value={carvingDepth}
+                    onChange={(e) => setCarvingDepth(parseFloat(e.target.value))}
+                    className="w-full h-3 bg-dark-700 rounded-lg cursor-pointer"
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </div>
+              </div>
             )}
           </div>
 

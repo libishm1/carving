@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 
 interface TweenMeshProps {
@@ -21,10 +21,16 @@ export const TweenMesh = ({
   onUpdate
 }: TweenMeshProps) => {
   const meshRef = useRef<THREE.Mesh>(null);
-  
-  const { baseGeometry, maxDistances } = useMemo(() => {
-    const bvh = (maquetteMesh?.geometry as any)?.boundsTree;
-    if (!maquetteMesh || !bvh) return { baseGeometry: null, maxDistances: null };
+  const [geometryData, setGeometryData] = useState<{baseGeometry: THREE.PlaneGeometry, maxDistances: Float32Array} | null>(null);
+
+  useEffect(() => {
+    if (!maquetteMesh || !meshRef.current) return;
+    const bvh = (maquetteMesh.geometry as any)?.boundsTree;
+    if (!bvh) return;
+
+    // Ensure matrices are updated
+    meshRef.current.updateMatrixWorld(true);
+    maquetteMesh.updateMatrixWorld(true);
 
     const hx = stockSize[0] / 2;
     const hy = stockSize[1] / 2;
@@ -42,7 +48,6 @@ export const TweenMesh = ({
     
     // Object3D.lookAt makes the -Z axis face the target.
     // Since PlaneGeometry front face is +Z, we must look at -carvingNormal to make +Z face +carvingNormal!
-    // This fixes the X-axis mirror flipping issue.
     const target = center.clone().sub(carvingNormal);
     geo.lookAt(target); 
     geo.translate(center.x, center.y, center.z);
@@ -53,25 +58,28 @@ export const TweenMesh = ({
     
     const maxDepth = maxProj * 2; 
 
-    // We do exact Local Space Raycasting to bypass R3F matrixWorld render delays
+    // Calculate transformation matrices
+    const tweenToWorld = meshRef.current.matrixWorld;
+    const worldToMaquette = maquetteMesh.matrixWorld.clone().invert();
+    const tweenToMaquette = worldToMaquette.multiply(tweenToWorld);
+    const tweenToMaquetteInv = tweenToMaquette.clone().invert();
+
     const ray = new THREE.Ray();
-    const invScale = new THREE.Vector3(1/scaleFactors[0], 1/scaleFactors[1], 1/scaleFactors[2]);
-    const dir = carvingNormal.clone().multiplyScalar(-1);
-    const localDir = dir.clone().multiply(invScale).normalize();
-    
+    const localNormal = carvingNormal.clone().transformDirection(tweenToMaquette).normalize();
+
     for (let i = 0; i < numVertices; i++) {
       const origin = new THREE.Vector3(positions[i*3], positions[i*3+1], positions[i*3+2]);
       
-      // Transform ray to local space of the unscaled maquette geometry
-      ray.origin.copy(origin).multiply(invScale);
-      ray.direction.copy(localDir);
+      // Transform ray to local space of the maquette geometry
+      ray.origin.copy(origin).applyMatrix4(tweenToMaquette);
+      ray.direction.copy(localNormal).negate();
       
       const hit = bvh.raycastFirst(ray, maquetteMesh.material);
       
       if (hit) {
-        // hit.point is in local space! Convert back to scaled space to find true world distance
-        const scaledHitPoint = hit.point.clone().multiply(new THREE.Vector3(scaleFactors[0], scaleFactors[1], scaleFactors[2]));
-        distances[i] = origin.distanceTo(scaledHitPoint);
+        // Convert hit point back to TweenMesh local space to get the true distance
+        const hitInTweenSpace = hit.point.clone().applyMatrix4(tweenToMaquetteInv);
+        distances[i] = origin.distanceTo(hitInTweenSpace);
       } else {
         distances[i] = maxDepth;
       }
@@ -79,17 +87,18 @@ export const TweenMesh = ({
     
     geo.userData.basePositions = new Float32Array(positions);
     
-    return { baseGeometry: geo, maxDistances: distances };
-  }, [stockSize, carvingNormal, maquetteMesh]);
+    setGeometryData({ baseGeometry: geo, maxDistances: distances });
+  }, [stockSize, carvingNormal, maquetteMesh, scaleFactors]);
 
   useEffect(() => {
-    if (meshRef.current && baseGeometry) {
+    if (meshRef.current && geometryData?.baseGeometry) {
       onLoaded(meshRef.current);
     }
-  }, [baseGeometry, onLoaded]);
+  }, [geometryData, onLoaded]);
 
   useEffect(() => {
-    if (!baseGeometry || !maxDistances || !meshRef.current) return;
+    if (!geometryData || !meshRef.current) return;
+    const { baseGeometry, maxDistances } = geometryData;
     
     const positions = baseGeometry.attributes.position.array as Float32Array;
     const basePos = baseGeometry.userData.basePositions as Float32Array;
@@ -104,27 +113,29 @@ export const TweenMesh = ({
     
     baseGeometry.attributes.position.needsUpdate = true;
     baseGeometry.computeVertexNormals();
+    baseGeometry.computeBoundingBox();
+    baseGeometry.computeBoundingSphere();
     
     // Regenerate BVH dynamically so the Raycaster can physically snap to the morphed surface!
-    if (baseGeometry.computeBoundsTree) {
-        baseGeometry.computeBoundsTree(); 
+    if ((baseGeometry as any).computeBoundsTree) {
+        (baseGeometry as any).computeBoundsTree(); 
     }
     
     if (onUpdate) onUpdate();
     
-  }, [baseGeometry, maxDistances, tweenValue, carvingNormal, onUpdate]);
-
-  if (!baseGeometry) return null;
+  }, [geometryData, tweenValue, carvingNormal, onUpdate]);
 
   return (
-    <mesh ref={meshRef} geometry={baseGeometry}>
-      <meshStandardMaterial 
-        color="#ffffff" 
-        side={THREE.DoubleSide} 
-        transparent={true}
-        opacity={0.6}
-        roughness={0.7}
-      />
+    <mesh ref={meshRef} geometry={geometryData?.baseGeometry || undefined}>
+      {geometryData?.baseGeometry && (
+        <meshStandardMaterial 
+          color="#ffffff" 
+          side={THREE.DoubleSide} 
+          transparent={true}
+          opacity={0.6}
+          roughness={0.7}
+        />
+      )}
     </mesh>
   );
 };

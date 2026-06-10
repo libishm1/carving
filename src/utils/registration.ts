@@ -58,11 +58,31 @@ export function calculateRegistration(
 /**
  * Constructs a coordinate system basis matrix from 3 points forming a triangle.
  */
-export function calculateTriangleBasis(p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3): THREE.Matrix4 {
-  const xAxis = new THREE.Vector3().subVectors(p2, p1).normalize();
-  const tempYAxis = new THREE.Vector3().subVectors(p3, p1).normalize();
-  const zAxis = new THREE.Vector3().crossVectors(xAxis, tempYAxis).normalize();
+export function calculateTriangleBasis(p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3) {
+  // Vector from p1 to p2 forms the X axis
+  const xAxis = new THREE.Vector3().subVectors(p2, p1);
+  const width = xAxis.length();
+  
+  // Vector from p1 to p3
+  const v13 = new THREE.Vector3().subVectors(p3, p1);
+  
+  // Calculate cross product to find Z axis (normal to the plane)
+  const zAxis = new THREE.Vector3().crossVectors(xAxis, v13);
+  
+  // Collinearity Check: If the cross product magnitude is extremely close to zero, 
+  // the 3 points are essentially in a straight line, which breaks the plane definition.
+  if (zAxis.lengthSq() < 1e-10) {
+    throw new Error("Points are collinear. The 3 registration points must form a valid triangle.");
+  }
+  
+  zAxis.normalize();
+  xAxis.normalize();
+  
+  // Recalculate Y axis to ensure perfect orthogonality
   const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+  
+  const height = v13.projectOnVector(yAxis).length();
+  const depth = v13.projectOnVector(zAxis).length(); // Should be ~0
 
   const matrix = new THREE.Matrix4();
   matrix.makeBasis(xAxis, yAxis, zAxis);
