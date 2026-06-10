@@ -19,7 +19,6 @@ interface ARControllerProps {
   digitalPins: THREE.Vector3[];
   onFiducialRegistrationComplete: (physicalPoints: THREE.Vector3[]) => void;
   arMode: 'none' | 'webxr_dom' | 'webxr_basic' | 'html5';
-  crosshairDepth: number;
 }
 
 export const ARController: React.FC<ARControllerProps> = ({ 
@@ -32,8 +31,7 @@ export const ARController: React.FC<ARControllerProps> = ({
   onRegistrationComplete,
   digitalPins,
   onFiducialRegistrationComplete,
-  arMode,
-  crosshairDepth
+  arMode
 }) => {
   const { camera } = useThree();
   const [physicalHitPoint, setPhysicalHitPoint] = useState<THREE.Vector3 | null>(null);
@@ -43,9 +41,9 @@ export const ARController: React.FC<ARControllerProps> = ({
 
   useEffect(() => {
     if (arMode === 'html5' && !physicalHitPoint) {
-      setPhysicalHitPoint(new THREE.Vector3(0, 0, -crosshairDepth));
+      setPhysicalHitPoint(new THREE.Vector3(0, 0, -1));
     }
-  }, [arMode, physicalHitPoint, crosshairDepth]);
+  }, [arMode, physicalHitPoint]);
 
   // Perform continuous hit-test against the physical environment
   useXRHitTest((results: any[], getWorldMatrix: any) => {
@@ -93,8 +91,8 @@ export const ARController: React.FC<ARControllerProps> = ({
 
   useFrame(() => {
     if (arMode === 'html5' && hitMeshRef.current && camera && (!isPlaced || registrationStep !== 'idle')) {
-      // Lock the crosshair to the depth specified by the manual slider
-      const targetPos = new THREE.Vector3(0, 0, -crosshairDepth);
+      // Lock the crosshair to exactly 1 meter in front (depth doesn't matter, origin is the printed marker)
+      const targetPos = new THREE.Vector3(0, 0, -1);
       targetPos.applyMatrix4(camera.matrixWorld);
       
       hitMeshRef.current.position.lerp(targetPos, 0.5);

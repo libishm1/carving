@@ -1,5 +1,6 @@
 import { useState, useMemo, Suspense, useRef, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { ARCanvas, ARMarker } from '@artcom/react-three-arjs';
 import { OrbitControls, ContactShadows, Grid, TransformControls, Html, DeviceOrientationControls } from '@react-three/drei';
 import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
@@ -81,9 +82,7 @@ function App() {
   const [selectedBlockLocalPoint, setSelectedBlockLocalPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
   const [arMode, setArMode] = useState<'none' | 'webxr_dom' | 'webxr_basic' | 'html5'>('none');
-  const [crosshairDepth, setCrosshairDepth] = useState(1.0);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
+    
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -294,33 +293,12 @@ function App() {
     }
   };
 
-  const startHtml5Camera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-    } catch (err) {
-      alert("Failed to access camera for HTML5 mode: " + err);
-      setArMode('none');
-    }
-  };
-
-  const stopHtml5Camera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-  };
-
+  
   const handleEnterAR = async () => {
     try {
       if (!navigator.xr) {
         // Fallback directly to HTML5
         setArMode('html5');
-        startHtml5Camera();
         return;
       }
       
@@ -328,7 +306,6 @@ function App() {
       if (!supported) {
         console.warn("AR (immersive-ar) is not supported, falling back to HTML5 Magic Window.");
         setArMode('html5');
-        startHtml5Camera();
         return;
       }
       
@@ -351,12 +328,7 @@ function App() {
     }
   };
 
-  const handleExitAR = () => {
-    if (arMode === 'html5') {
-      stopHtml5Camera();
-      setArMode('none');
-    }
-  };
+  const handleExitAR = () => { setArMode('none'); };
 
   return (
     <div 
@@ -448,32 +420,7 @@ function App() {
           </div>
         )}
 
-        {arMode === 'html5' && (
-          <>
-            <video 
-              ref={videoRef}
-              className="absolute top-0 left-0 w-full h-full object-cover z-0"
-              playsInline
-              muted
-              autoPlay
-            />
-            <div className="absolute bottom-24 left-4 right-4 z-50 bg-dark-900/80 backdrop-blur px-4 py-3 rounded-xl border border-primary-500/30 shadow-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-primary-400">Crosshair Distance</span>
-                <span className="text-xs font-mono bg-dark-800 px-2 py-1 rounded">{crosshairDepth.toFixed(2)}m</span>
-              </div>
-              <input 
-                type="range" 
-                min="0.1" 
-                max="3.0" 
-                step="0.05" 
-                value={crosshairDepth} 
-                onChange={(e) => setCrosshairDepth(parseFloat(e.target.value))}
-                className="w-full accent-primary-500"
-              />
-            </div>
-          </>
-        )}
+        
         
         {arMode !== 'none' && (
           <button
@@ -491,30 +438,22 @@ function App() {
           <BoxSelect className="w-5 h-5" />
           Enter AR
         </button>
-        <Canvas 
-          camera={{ position: [2, 2, 2], fov: 45 }} 
-          gl={{ localClippingEnabled: true, alpha: true }}
-          className={arMode === 'html5' ? 'z-10 bg-transparent' : ''}
-        >
-          <XR store={arMode === 'webxr_dom' ? storeWithDOM : storeWithoutDOM}>
+        {arMode === 'html5' ? (
+          <ARCanvas 
+            camera={{ position: [0, 0, 0] }}
+            onCameraStreamReady={() => console.log("AR.js stream ready")}
+            onCameraStreamError={() => alert("Failed to access camera for AR.js")}
+          >
             <ambientLight intensity={0.4} />
             <hemisphereLight intensity={0.6} color="#ffffff" groundColor="#444444" />
             <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
             <directionalLight position={[-10, 5, -10]} intensity={0.5} />
-            
-            {arMode === 'html5' ? (
-              <DeviceOrientationControls />
-            ) : (
-              <OrbitControls makeDefault />
-            )}
-          
-          <ARController 
-            blockMeshRef={blockMeshRef} 
-            onPlaceModel={setModelPosition} 
-            registrationStep={registrationStep}
-            setRegistrationStep={setRegistrationStep}
-            registrationPoints={registrationPoints}
-            setRegistrationPoints={setRegistrationPoints}
+            <ARMarker 
+              type={"pattern"} 
+              patternUrl={"data/hiro.patt"}
+              onMarkerFound={() => console.log("Marker Found")}
+            >
+              tRegistrationPoints}
             onRegistrationComplete={(matrix, dimensions) => {
               setRegistrationMatrix(matrix);
               setStockMode('custom');
@@ -536,7 +475,7 @@ function App() {
               }
             }}
             arMode={arMode}
-            crosshairDepth={crosshairDepth}
+            
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
@@ -646,8 +585,164 @@ function App() {
               </mesh>
             ))}
           </group>
-          </XR>
-        </Canvas>
+          
+            </ARMarker>
+          </ARCanvas>
+        ) : (
+          <Canvas 
+            camera={{ position: [2, 2, 2], fov: 45 }} 
+            gl={{ localClippingEnabled: true, alpha: true }}
+          >
+            <XR store={arMode === 'webxr_dom' ? storeWithDOM : storeWithoutDOM}>
+              <ambientLight intensity={0.4} />
+            <hemisphereLight intensity={0.6} color="#ffffff" groundColor="#444444" />
+            <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
+            <directionalLight position={[-10, 5, -10]} intensity={0.5} />
+            
+            <OrbitControls makeDefault />
+          
+          <ARController 
+            blockMeshRef={blockMeshRef} 
+            onPlaceModel={setModelPosition} 
+            registrationStep={registrationStep}
+            setRegistrationStep={setRegistrationStep}
+            registrationPoints={registrationPoints}
+            setRegistrationPoints={setRegistrationPoints}
+            onRegistrationComplete={(matrix, dimensions) => {
+              setRegistrationMatrix(matrix);
+              setStockMode('custom');
+              setCustomStockSize(dimensions);
+              setArScale(1);
+              setArRotation(0);
+            }}
+            digitalPins={digitalPins}
+            onFiducialRegistrationComplete={(physicalPoints) => {
+              try {
+                const matrix = calculateTriangleRegistration(digitalPins, physicalPoints);
+                setRegistrationMatrix(matrix);
+                setArScale(1);
+                setArRotation(0);
+                setIsPinningMode(false);
+              } catch (e) {
+                console.error(e);
+                alert("Failed to calculate triangle alignment. Please ensure your 3 points are not in a straight line.");
+              }
+            }}
+            arMode={arMode}
+            
+          />
+
+          <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
+          <group 
+            ref={mainGroupRef}
+            matrix={registrationMatrix || undefined}
+            matrixAutoUpdate={!registrationMatrix}
+            position={registrationMatrix ? undefined : [modelPosition.x, modelPosition.y + ((effectiveStock[1] * arScale) / 2), modelPosition.z]}
+            scale={registrationMatrix ? undefined : [arScale, arScale, arScale]}
+            rotation={registrationMatrix ? undefined : [0, arRotation, 0]}
+          >
+            <group position={registrationMatrix ? [effectiveStock[0]/2, effectiveStock[1]/2, -effectiveStock[2]/2] : [0,0,0]}>
+              <Suspense fallback={<Html><div className="text-white">Loading...</div></Html>}>
+                
+                <group ref={transformGroupRef}>
+                  <Model
+                    url={modelUrl}
+                    extension={modelExt}
+                    color={isCarvingMode ? "#1e3a8a" : "#e0e0e0"}
+                    scale={scaleFactors}
+                    onPointerClick={handleMaquetteClick}
+                    onLoaded={(box, size, root) => {
+                      handleSculptureLoaded(box, size);
+                      if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
+                      else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
+                    }}
+                  />
+
+                  {!isCarvingMode && effectiveStock[0] > 0 && (
+                    <group position={sculptureCenter}>
+                      <DynamicBlock 
+                        size={effectiveStock} 
+                        onLoaded={(_box, _size, root) => {
+                          dynamicBlockRef.current = root;
+                          if (!isCarvingMode) setBlockMeshRef(root);
+                        }} 
+                      />
+                    </group>
+                  )}
+
+                  {isCarvingMode && maquetteMeshRef && effectiveStock[0] > 0 && (
+                    <group position={sculptureCenter}>
+                      <TweenMesh
+                        stockSize={effectiveStock}
+                        scaleFactors={scaleFactors}
+                        carvingNormal={carvingNormal}
+                        maquetteMesh={maquetteMeshRef}
+                        tweenValue={maxCarvingDepth > 0 ? (carvingDepth / maxCarvingDepth) : 0}
+                        onLoaded={(mesh) => {
+                          setBlockMeshRef(mesh);
+                        }}
+                        onUpdate={() => {
+                          recalculatePointing();
+                        }}
+                      />
+                    </group>
+                  )}
+
+                  {selectedMaquetteLocalPoint && (
+                    <mesh position={selectedMaquetteLocalPoint}>
+                      <sphereGeometry args={[0.02 / scaleFactors[0], 16, 16]} />
+                      <meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={0.8} />
+                    </mesh>
+                  )}
+                  {selectedBlockLocalPoint && (
+                    <mesh position={selectedBlockLocalPoint}>
+                      <sphereGeometry args={[0.03 / scaleFactors[0], 16, 16]} />
+                      <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.5} />
+                    </mesh>
+                  )}
+                  {selectedMaquetteLocalPoint && selectedBlockLocalPoint && (
+                    <line>
+                      <bufferGeometry attach="geometry">
+                          <bufferAttribute
+                            attach="attributes-position"
+                            args={[new Float32Array([
+                              selectedMaquetteLocalPoint.x, selectedMaquetteLocalPoint.y, selectedMaquetteLocalPoint.z,
+                              selectedBlockLocalPoint.x, selectedBlockLocalPoint.y, selectedBlockLocalPoint.z
+                            ]), 3]}
+                          />
+                      </bufferGeometry>
+                      <lineBasicMaterial attach="material" color="#ef4444" linewidth={2} />
+                    </line>
+                  )}
+                </group>
+
+                {transformMode !== 'none' && transformGroupRef.current && !isCarvingMode && (
+                  <TransformControls 
+                    object={transformGroupRef.current} 
+                    mode={transformMode} 
+                  />
+                )}
+              </Suspense>
+            </group>
+            
+            <ContactShadows resolution={512} scale={10} blur={2} opacity={0.5} far={10} color="#000000" />
+            
+            {digitalPins.map((pin, i) => (
+              <mesh key={i} position={pin}>
+                <sphereGeometry args={[0.015, 16, 16]} />
+                <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.8} />
+                <Html position={[0, 0.02, 0]} center className="pointer-events-none">
+                  <div className="bg-red-600 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg">
+                    {i + 1}
+                  </div>
+                </Html>
+              </mesh>
+            ))}
+          </group>
+          
+            </XR>
+          </Canvas>
+        )}
       </div>
 
       {/* Sidebar Overlay/Drawer */}
