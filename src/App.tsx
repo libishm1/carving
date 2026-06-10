@@ -7,7 +7,6 @@ import { TweenMesh } from './components/TweenMesh';
 import { ARController, type RegistrationStep } from './components/ARController';
 import { calculateTriangleRegistration } from './utils/registration';
 import { Settings2, Maximize, BoxSelect, Menu, X, Upload, Move, RotateCw, Scaling, MapPin } from 'lucide-react';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 
 export const store = createXRStore();
