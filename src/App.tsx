@@ -81,8 +81,8 @@ function App() {
   const dynamicBlockRef = useRef<THREE.Object3D | null>(null);
   const mainGroupRef = useRef<THREE.Group>(null);
   const transformGroupRef = useRef<THREE.Group>(null);
-  const [selectedMaquettePoint, setSelectedMaquettePoint] = useState<THREE.Vector3 | null>(null);
-  const [selectedBlockPoint, setSelectedBlockPoint] = useState<THREE.Vector3 | null>(null);
+  const [selectedMaquetteLocalPoint, setSelectedMaquetteLocalPoint] = useState<THREE.Vector3 | null>(null);
+  const [selectedBlockLocalPoint, setSelectedBlockLocalPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,31 +178,37 @@ function App() {
     return { maxCarvingDepth: maxProj * 2 };
   }, [effectiveStock, carvingNormal]);
 
-  const updateSnapping = (maquettePoint: THREE.Vector3, blockMesh: THREE.Object3D | null) => {
+  const updateSnapping = useCallback((localMaquettePoint: THREE.Vector3, blockMesh: THREE.Object3D | null) => {
     if (!blockMesh || !transformGroupRef.current) return;
+    
+    const worldPoint = localMaquettePoint.clone();
+    transformGroupRef.current.localToWorld(worldPoint);
+    
     const worldNormal = carvingNormal.clone().transformDirection(transformGroupRef.current.matrixWorld).normalize();
     const raycaster = new THREE.Raycaster();
 
     if (isCarvingMode) {
       const dir = worldNormal.clone();
-      const origin = maquettePoint.clone().add(worldNormal.clone().multiplyScalar(-0.01));
+      const origin = worldPoint.clone().add(worldNormal.clone().multiplyScalar(-0.01));
       raycaster.set(origin, dir);
       const hits = raycaster.intersectObject(blockMesh, true);
       if (hits.length > 0) {
-        setSelectedBlockPoint(hits[0].point);
+        const localHit = hits[0].point.clone();
+        transformGroupRef.current.worldToLocal(localHit);
+        setSelectedBlockLocalPoint(localHit);
         setDrillDepth(hits[0].distance - 0.01);
       }
     } else {
-      let closestPointWorld = maquettePoint.clone();
+      let closestPointWorld = worldPoint.clone();
       let minDistance = Infinity;
       blockMesh.traverse((child: any) => {
         if (child instanceof THREE.Mesh && child.geometry.boundsTree) {
           const inverseMatrix = new THREE.Matrix4().copy(child.matrixWorld).invert();
-          const localPoint = maquettePoint.clone().applyMatrix4(inverseMatrix);
-          const res = child.geometry.boundsTree.closestPointToPoint(localPoint, {});
+          const localHitPt = worldPoint.clone().applyMatrix4(inverseMatrix);
+          const res = child.geometry.boundsTree.closestPointToPoint(localHitPt, {});
           if (res && res.point) {
             const worldPt = res.point.clone().applyMatrix4(child.matrixWorld);
-            const dist = worldPt.distanceTo(maquettePoint);
+            const dist = worldPt.distanceTo(worldPoint);
             if (dist < minDistance) {
               minDistance = dist;
               closestPointWorld = worldPt;
@@ -211,23 +217,23 @@ function App() {
         }
       });
       if (minDistance !== Infinity) {
-        setSelectedBlockPoint(closestPointWorld);
+        const localHit = closestPointWorld.clone();
+        transformGroupRef.current.worldToLocal(localHit);
+        setSelectedBlockLocalPoint(localHit);
         setDrillDepth(minDistance);
       }
     }
-  };
+  }, [carvingNormal, isCarvingMode]);
 
-  const recalculatePointing = () => {
-    if (selectedMaquettePoint) {
-      updateSnapping(selectedMaquettePoint, blockMeshRef);
+  const recalculatePointing = useCallback(() => {
+    if (selectedMaquetteLocalPoint) {
+      updateSnapping(selectedMaquetteLocalPoint, blockMeshRef);
     }
-  };
+  }, [selectedMaquetteLocalPoint, blockMeshRef, updateSnapping]);
 
   useEffect(() => {
-    if (selectedMaquettePoint) {
-      updateSnapping(selectedMaquettePoint, blockMeshRef);
-    }
-  }, [isCarvingMode, blockMeshRef, carvingNormal]);
+    recalculatePointing();
+  }, [recalculatePointing, scaleFactors[0]]);
 
   const handleMaquetteClick = (point: THREE.Vector3, worldNormal?: THREE.Vector3) => {
     if (isPinningMode && mainGroupRef.current) {
@@ -255,8 +261,10 @@ function App() {
       }
     }
 
-    setSelectedMaquettePoint(point);
-    updateSnapping(point, blockMeshRef);
+    const localClick = point.clone();
+    transformGroupRef.current.worldToLocal(localClick);
+    setSelectedMaquetteLocalPoint(localClick);
+    updateSnapping(localClick, blockMeshRef);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -476,6 +484,33 @@ function App() {
                       />
                     </group>
                   )}
+
+                  {selectedMaquetteLocalPoint && (
+                    <mesh position={selectedMaquetteLocalPoint}>
+                      <sphereGeometry args={[0.02 / scaleFactors[0], 16, 16]} />
+                      <meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={0.8} />
+                    </mesh>
+                  )}
+                  {selectedBlockLocalPoint && (
+                    <mesh position={selectedBlockLocalPoint}>
+                      <sphereGeometry args={[0.03 / scaleFactors[0], 16, 16]} />
+                      <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.5} />
+                    </mesh>
+                  )}
+                  {selectedMaquetteLocalPoint && selectedBlockLocalPoint && (
+                    <line>
+                      <bufferGeometry attach="geometry">
+                          <bufferAttribute
+                            attach="attributes-position"
+                            args={[new Float32Array([
+                              selectedMaquetteLocalPoint.x, selectedMaquetteLocalPoint.y, selectedMaquetteLocalPoint.z,
+                              selectedBlockLocalPoint.x, selectedBlockLocalPoint.y, selectedBlockLocalPoint.z
+                            ]), 3]}
+                          />
+                      </bufferGeometry>
+                      <lineBasicMaterial attach="material" color="#ef4444" linewidth={2} />
+                    </line>
+                  )}
                 </group>
 
                 {transformMode !== 'none' && transformGroupRef.current && !isCarvingMode && (
@@ -501,32 +536,6 @@ function App() {
               </mesh>
             ))}
           </group>
-          {selectedMaquettePoint && (
-            <mesh position={selectedMaquettePoint}>
-              <sphereGeometry args={[0.02, 16, 16]} />
-              <meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={0.8} />
-            </mesh>
-          )}
-          {selectedBlockPoint && (
-            <mesh position={selectedBlockPoint}>
-              <sphereGeometry args={[0.03, 16, 16]} />
-              <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.5} />
-            </mesh>
-          )}
-          {selectedMaquettePoint && selectedBlockPoint && (
-            <line>
-              <bufferGeometry attach="geometry">
-                  <bufferAttribute
-                    attach="attributes-position"
-                    args={[new Float32Array([
-                      selectedMaquettePoint.x, selectedMaquettePoint.y, selectedMaquettePoint.z,
-                      selectedBlockPoint.x, selectedBlockPoint.y, selectedBlockPoint.z
-                    ]), 3]}
-                  />
-              </bufferGeometry>
-              <lineBasicMaterial attach="material" color="#ef4444" linewidth={2} />
-            </line>
-          )}
           </XR>
         </Canvas>
       </div>
