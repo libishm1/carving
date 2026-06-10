@@ -3,7 +3,7 @@
 
 @layer base {
   body {
-    @apply bg-dark-900 text-white font-sans antialiased overflow-hidden;
+    @apply bg-transparent text-white font-sans antialiased overflow-hidden;
   }
 }
 

@@ -331,7 +331,7 @@ function App() {
 
   return (
     <div 
-      className="flex h-[100dvh] w-full bg-dark-900 text-gray-100 overflow-hidden relative"
+      className={`flex h-[100dvh] w-full text-gray-100 overflow-hidden relative ${arMode === 'none' ? 'bg-dark-900' : 'bg-transparent'}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
     >
