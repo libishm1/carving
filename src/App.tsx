@@ -103,61 +103,55 @@ function App() {
     }
   };
 
-  // Revert raycaster to standard bounding block when Carving Mode is toggled off
   useEffect(() => {
     if (!isCarvingMode && dynamicBlockRef.current) {
       setBlockMeshRef(dynamicBlockRef.current);
     }
   }, [isCarvingMode]);
 
-  // Calculate scaling and fit
-  const appliedScaleRef = useRef<number>(1);
+  const [baseSize, setBaseSize] = useState<[number, number, number]>([0, 0, 0]);
+  const [baseCenter, setBaseCenter] = useState<[number, number, number]>([0, 0, 0]);
 
   const { scaleFactors, fitResult, currentSize } = useMemo(() => {
     let factor = 1;
-    const currentScale = appliedScaleRef.current;
     
     if (mode === 'multiplier') {
       factor = value;
     } else if (mode === 'target_longest') {
-      const longest = Math.max(...sculptureSize);
-      if (longest > 0) factor = currentScale * (value / longest);
-      else factor = currentScale;
+      const longest = Math.max(...baseSize);
+      if (longest > 0) factor = value / longest;
     } else if (mode === 'target_x') {
-      if (sculptureSize[0] > 0) factor = currentScale * (value / sculptureSize[0]);
-      else factor = currentScale;
+      if (baseSize[0] > 0) factor = value / baseSize[0];
     } else if (mode === 'target_y') {
-      if (sculptureSize[1] > 0) factor = currentScale * (value / sculptureSize[1]);
-      else factor = currentScale;
+      if (baseSize[1] > 0) factor = value / baseSize[1];
     } else if (mode === 'target_z') {
-      if (sculptureSize[2] > 0) factor = currentScale * (value / sculptureSize[2]);
-      else factor = currentScale;
+      if (baseSize[2] > 0) factor = value / baseSize[2];
     } else if (mode === 'fit') {
-      const ratioX = customStockSize[0] / (sculptureSize[0] || 1);
-      const ratioY = customStockSize[1] / (sculptureSize[1] || 1);
-      const ratioZ = customStockSize[2] / (sculptureSize[2] || 1);
-      factor = currentScale * Math.min(ratioX, ratioY, ratioZ);
+      const ratioX = customStockSize[0] / (baseSize[0] || 1);
+      const ratioY = customStockSize[1] / (baseSize[1] || 1);
+      const ratioZ = customStockSize[2] / (baseSize[2] || 1);
+      factor = Math.min(ratioX, ratioY, ratioZ);
     }
 
     if (!isFinite(factor) || factor <= 0) factor = 1;
 
-    // Prevent floating point oscillation loops (e.g. 1.99999 vs 2.00000)
-    if (Math.abs(factor - currentScale) < 0.0001) {
-      factor = currentScale;
-    }
-
-    appliedScaleRef.current = factor;
-
     const factors: [number, number, number] = [factor, factor, factor];
 
     const scaledExtents: [number, number, number] = [
-      sculptureSize[0],
-      sculptureSize[1],
-      sculptureSize[2]
+      baseSize[0] * factor,
+      baseSize[1] * factor,
+      baseSize[2] * factor
     ];
 
     return { scaleFactors: factors, fitResult: null as { fits: boolean, clearance: number[] } | null, currentSize: scaledExtents };
-  }, [sculptureSize, customStockSize, mode, value]);
+  }, [baseSize, customStockSize, mode, value]);
+
+  const sculptureSize = currentSize;
+  const sculptureCenter: [number, number, number] = [
+    baseCenter[0] * scaleFactors[0],
+    baseCenter[1] * scaleFactors[0],
+    baseCenter[2] * scaleFactors[0]
+  ];
 
   const effectiveStock: [number, number, number] = useMemo(() => {
     if (stockMode === 'custom') {
@@ -171,101 +165,31 @@ function App() {
     }
   }, [stockMode, sculptureSize, margin, customStockSize]);
 
-  const updateBoundingBox = () => {
-    if (!transformGroupRef.current || !mainGroupRef.current) return;
-    
-    mainGroupRef.current.updateMatrixWorld(true);
-    
-    const box = new THREE.Box3();
-    const invMainMatrix = mainGroupRef.current.matrixWorld.clone().invert();
-    
-    transformGroupRef.current.traverse((child: any) => {
-      if (child.isMesh && child.geometry) {
-        if (!child.geometry.boundingBox) {
-          child.geometry.computeBoundingBox();
-        }
-        
-        const childToMain = invMainMatrix.clone().multiply(child.matrixWorld);
-        const childBox = child.geometry.boundingBox.clone();
-        childBox.applyMatrix4(childToMain);
-        box.union(childBox);
-      }
-    });
-    
-    if (box.isEmpty()) return;
-
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    
+  const handleSculptureLoaded = useCallback((box: THREE.Box3, size: number[]) => {
+    setBaseSize([size[0], size[1], size[2]]);
     const center = new THREE.Vector3();
     box.getCenter(center);
-    
-    if (
-      size.x !== sculptureSize[0] || 
-      size.y !== sculptureSize[1] || 
-      size.z !== sculptureSize[2]
-    ) {
-      setSculptureSize([size.x, size.y, size.z]);
-    }
-    
-    if (
-      center.x !== sculptureCenter[0] || 
-      center.y !== sculptureCenter[1] || 
-      center.z !== sculptureCenter[2]
-    ) {
-      setSculptureCenter([center.x, center.y, center.z]);
-    }
-  };
+    setBaseCenter([center.x, center.y, center.z]);
+  }, []);
 
-  const scaleFactorScalar = scaleFactors[0];
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateBoundingBox();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [scaleFactorScalar, margin, stockMode]);
-
-  // Compute the carving normal in mainGroupRef's local space
-  const mainCarvingNormal = useMemo(() => {
-    if (!transformGroupRef.current || !mainGroupRef.current) return carvingNormal;
-    const worldNormal = carvingNormal.clone().transformDirection(transformGroupRef.current.matrixWorld).normalize();
-    const invMainMatrix = mainGroupRef.current.matrixWorld.clone().invert();
-    return worldNormal.transformDirection(invMainMatrix).normalize();
-  }, [carvingNormal, sculptureSize]); // Recalculate when bounding box changes
-
-  // Carving Simulation Max Depth
   const { maxCarvingDepth } = useMemo(() => {
     const hx = effectiveStock[0] / 2;
     const hy = effectiveStock[1] / 2;
     const hz = effectiveStock[2] / 2;
-    
-    // Find the extremum of the block in the direction of the carving normal
-    const maxProj = Math.abs(mainCarvingNormal.x) * hx + Math.abs(mainCarvingNormal.y) * hy + Math.abs(mainCarvingNormal.z) * hz;
-    
-    return {
-      maxCarvingDepth: maxProj * 2
-    };
-  }, [effectiveStock, mainCarvingNormal]);
+    const maxProj = Math.abs(carvingNormal.x) * hx + Math.abs(carvingNormal.y) * hy + Math.abs(carvingNormal.z) * hz;
+    return { maxCarvingDepth: maxProj * 2 };
+  }, [effectiveStock, carvingNormal]);
 
-  // Unified Snapping Logic
   const updateSnapping = (maquettePoint: THREE.Vector3, blockMesh: THREE.Object3D | null) => {
     if (!blockMesh || !transformGroupRef.current) return;
-    
-    // The carvingNormal is stored in local space of transformGroupRef.
-    // We must convert it to world space for the raycaster!
     const worldNormal = carvingNormal.clone().transformDirection(transformGroupRef.current.matrixWorld).normalize();
-    
     const raycaster = new THREE.Raycaster();
 
     if (isCarvingMode) {
-      // Raycast OUTWARDS from the model towards the TweenMesh block surface
       const dir = worldNormal.clone();
-      // Start slightly inside the model so we don't miss anything
       const origin = maquettePoint.clone().add(worldNormal.clone().multiplyScalar(-0.01));
       raycaster.set(origin, dir);
-      
       const hits = raycaster.intersectObject(blockMesh, true);
-      
       if (hits.length > 0) {
         setSelectedBlockPoint(hits[0].point);
         setDrillDepth(hits[0].distance - 0.01);
@@ -273,12 +197,10 @@ function App() {
     } else {
       let closestPointWorld = maquettePoint.clone();
       let minDistance = Infinity;
-  
       blockMesh.traverse((child: any) => {
         if (child instanceof THREE.Mesh && child.geometry.boundsTree) {
           const inverseMatrix = new THREE.Matrix4().copy(child.matrixWorld).invert();
           const localPoint = maquettePoint.clone().applyMatrix4(inverseMatrix);
-          
           const res = child.geometry.boundsTree.closestPointToPoint(localPoint, {});
           if (res && res.point) {
             const worldPt = res.point.clone().applyMatrix4(child.matrixWorld);
@@ -290,7 +212,6 @@ function App() {
           }
         }
       });
-      
       if (minDistance !== Infinity) {
         setSelectedBlockPoint(closestPointWorld);
         setDrillDepth(minDistance);
@@ -298,21 +219,18 @@ function App() {
     }
   };
 
-  // Recalculate Pointing Raycast when TweenMesh updates
   const recalculatePointing = () => {
     if (selectedMaquettePoint) {
       updateSnapping(selectedMaquettePoint, blockMeshRef);
     }
   };
 
-  // When Carving Mode or BlockMeshRef toggles, auto-refresh the point!
   useEffect(() => {
     if (selectedMaquettePoint) {
       updateSnapping(selectedMaquettePoint, blockMeshRef);
     }
   }, [isCarvingMode, blockMeshRef, carvingNormal]);
 
-  // Handle Maquette Clicks
   const handleMaquetteClick = (point: THREE.Vector3, worldNormal?: THREE.Vector3) => {
     if (isPinningMode && mainGroupRef.current) {
       const localPoint = point.clone();
@@ -325,10 +243,8 @@ function App() {
     }
 
     if (!isCarvingMode || !transformGroupRef.current) return;
-    
     if (!worldNormal) return;
 
-    // Convert the world normal to the LOCAL space of the transformGroupRef
     const invMatrix = transformGroupRef.current.matrixWorld.clone().invert();
     const localNormal = worldNormal.clone().transformDirection(invMatrix).normalize();
 
@@ -342,7 +258,6 @@ function App() {
     updateSnapping(point, blockMeshRef);
   };
 
-  // Touch Gesture Handlers for Pinch/Twist
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -378,7 +293,6 @@ function App() {
       onTouchMove={handleTouchMove}
     >
       <div className="flex-1 relative w-full h-full">
-        {/* Mobile Sidebar Toggle Button */}
         <button 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="md:hidden absolute bottom-4 right-4 z-50 bg-dark-800 p-4 rounded-full shadow-xl border border-dark-600 text-white w-14 h-14 flex items-center justify-center"
@@ -386,7 +300,6 @@ function App() {
           {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
 
-        {/* Transform Tools Overlay */}
         {!isCarvingMode && (
           <div className={`absolute top-20 left-4 z-40 bg-dark-900/90 border border-dark-600 rounded-xl shadow-2xl p-2 flex flex-col gap-2 transition-opacity ${isSidebarOpen ? 'opacity-0 md:opacity-100 pointer-events-none md:pointer-events-auto' : 'opacity-100'}`}>
             <button title="Translate" onClick={() => setTransformMode(m => m === 'translate' ? 'none' : 'translate')} className={`p-3 rounded-lg transition-colors ${transformMode === 'translate' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
@@ -401,7 +314,6 @@ function App() {
           </div>
         )}
 
-        {/* Pinning Instructions - Step by Step Bubbles */}
         {isPinningMode && (
           <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 w-[95%] md:w-auto transition-all animate-bounce">
             <div className="bg-primary-900/95 border-2 border-primary-500 backdrop-blur-xl px-6 py-4 rounded-3xl shadow-2xl text-center relative">
@@ -432,13 +344,11 @@ function App() {
                   </button>
                 </>
               )}
-              {/* Speech bubble tail */}
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-primary-900 border-b-2 border-r-2 border-primary-500 transform rotate-45"></div>
             </div>
           </div>
         )}
 
-        {/* Massive Depth HUD */}
         {drillDepth !== null && registrationStep === 'idle' && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none w-[90%] md:w-auto">
             <div className="bg-dark-900/90 border-2 border-primary-500/50 backdrop-blur-xl px-8 py-4 rounded-3xl shadow-2xl text-center">
@@ -450,7 +360,6 @@ function App() {
           </div>
         )}
 
-        {/* AR Registration HUD */}
         {registrationStep !== 'idle' && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-[90%] md:w-auto">
             <div className="bg-purple-900/90 border-2 border-purple-500 backdrop-blur-xl px-8 py-4 rounded-3xl shadow-2xl text-center">
@@ -525,7 +434,6 @@ function App() {
               <Suspense fallback={<Html><div className="text-white">Loading...</div></Html>}>
                 
                 <group ref={transformGroupRef}>
-                  {/* The Real Mesh */}
                   <Model
                     url={modelUrl}
                     extension={modelExt}
@@ -536,58 +444,51 @@ function App() {
                       handleSculptureLoaded(box, size);
                       if (root instanceof THREE.Mesh) setMaquetteMeshRef(root);
                       else if (root.children.length > 0 && root.children[0] instanceof THREE.Mesh) setMaquetteMeshRef(root.children[0] as THREE.Mesh);
-                      // Initialize bounding box logic
-                      setTimeout(updateBoundingBox, 100);
                     }}
                   />
+
+                  {!isCarvingMode && effectiveStock[0] > 0 && (
+                    <group position={sculptureCenter}>
+                      <DynamicBlock 
+                        size={effectiveStock} 
+                        onLoaded={(_box, _size, root) => {
+                          dynamicBlockRef.current = root;
+                          if (!isCarvingMode) setBlockMeshRef(root);
+                        }} 
+                      />
+                    </group>
+                  )}
+
+                  {isCarvingMode && maquetteMeshRef && effectiveStock[0] > 0 && (
+                    <group position={sculptureCenter}>
+                      <TweenMesh
+                        stockSize={effectiveStock}
+                        scaleFactors={scaleFactors}
+                        carvingNormal={carvingNormal}
+                        maquetteMesh={maquetteMeshRef}
+                        tweenValue={maxCarvingDepth > 0 ? (carvingDepth / maxCarvingDepth) : 0}
+                        onLoaded={(mesh) => {
+                          setBlockMeshRef(mesh);
+                        }}
+                        onUpdate={() => {
+                          recalculatePointing();
+                        }}
+                      />
+                    </group>
+                  )}
                 </group>
 
-                {/* Transform Controls */}
                 {transformMode !== 'none' && transformGroupRef.current && !isCarvingMode && (
                   <TransformControls 
                     object={transformGroupRef.current} 
                     mode={transformMode} 
-                    onMouseUp={updateBoundingBox}
                   />
                 )}
               </Suspense>
             </group>
             
-            {/* Dynamic Stock Block ghost */}
-            {!isCarvingMode && effectiveStock[0] > 0 && (
-              <group position={sculptureCenter}>
-                <DynamicBlock 
-                  size={effectiveStock} 
-                  onLoaded={(_box, _size, root) => {
-                    dynamicBlockRef.current = root;
-                    if (!isCarvingMode) setBlockMeshRef(root);
-                  }} 
-                />
-              </group>
-            )}
-
-            {/* Tween Mesh ghost */}
-            {isCarvingMode && maquetteMeshRef && effectiveStock[0] > 0 && (
-              <group position={sculptureCenter}>
-                <TweenMesh
-                  stockSize={effectiveStock}
-                  scaleFactors={scaleFactors}
-                  carvingNormal={mainCarvingNormal}
-                  maquetteMesh={maquetteMeshRef}
-                  tweenValue={maxCarvingDepth > 0 ? (carvingDepth / maxCarvingDepth) : 0}
-                  onLoaded={(mesh) => {
-                    setBlockMeshRef(mesh);
-                  }}
-                  onUpdate={() => {
-                    recalculatePointing();
-                  }}
-                />
-              </group>
-            )}
-
             <ContactShadows resolution={512} scale={10} blur={2} opacity={0.5} far={10} color="#000000" />
             
-            {/* Render Digital Pins so they stick to the model even when rotated */}
             {digitalPins.map((pin, i) => (
               <mesh key={i} position={pin}>
                 <sphereGeometry args={[0.015, 16, 16]} />
