@@ -81,6 +81,7 @@ function App() {
   const [selectedBlockLocalPoint, setSelectedBlockLocalPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
   const [arMode, setArMode] = useState<'none' | 'webxr_dom' | 'webxr_basic' | 'html5'>('none');
+  const [crosshairDepth, setCrosshairDepth] = useState(1.0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -448,13 +449,30 @@ function App() {
         )}
 
         {arMode === 'html5' && (
-          <video 
-            ref={videoRef}
-            className="absolute top-0 left-0 w-full h-full object-cover z-0"
-            playsInline
-            muted
-            autoPlay
-          />
+          <>
+            <video 
+              ref={videoRef}
+              className="absolute top-0 left-0 w-full h-full object-cover z-0"
+              playsInline
+              muted
+              autoPlay
+            />
+            <div className="absolute bottom-24 left-4 right-4 z-50 bg-dark-900/80 backdrop-blur px-4 py-3 rounded-xl border border-primary-500/30 shadow-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold text-primary-400">Crosshair Distance</span>
+                <span className="text-xs font-mono bg-dark-800 px-2 py-1 rounded">{crosshairDepth.toFixed(2)}m</span>
+              </div>
+              <input 
+                type="range" 
+                min="0.1" 
+                max="3.0" 
+                step="0.05" 
+                value={crosshairDepth} 
+                onChange={(e) => setCrosshairDepth(parseFloat(e.target.value))}
+                className="w-full accent-primary-500"
+              />
+            </div>
+          </>
         )}
         
         {arMode !== 'none' && (
@@ -518,6 +536,7 @@ function App() {
               }
             }}
             arMode={arMode}
+            crosshairDepth={crosshairDepth}
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
