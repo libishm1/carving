@@ -453,30 +453,35 @@ function App() {
               patternUrl={"data/hiro.patt"}
               onMarkerFound={() => console.log("Marker Found")}
             >
-              tRegistrationPoints}
-            onRegistrationComplete={(matrix, dimensions) => {
-              setRegistrationMatrix(matrix);
-              setStockMode('custom');
-              setCustomStockSize(dimensions);
-              setArScale(1);
-              setArRotation(0);
-            }}
-            digitalPins={digitalPins}
-            onFiducialRegistrationComplete={(physicalPoints) => {
-              try {
-                const matrix = calculateTriangleRegistration(digitalPins, physicalPoints);
-                setRegistrationMatrix(matrix);
-                setArScale(1);
-                setArRotation(0);
-                setIsPinningMode(false);
-              } catch (e) {
-                console.error(e);
-                alert("Failed to calculate triangle alignment. Please ensure your 3 points are not in a straight line.");
-              }
-            }}
-            arMode={arMode}
-            
-          />
+              <ARController 
+                blockMeshRef={blockMeshRef} 
+                onPlaceModel={setModelPosition} 
+                registrationStep={registrationStep}
+                setRegistrationStep={setRegistrationStep}
+                registrationPoints={registrationPoints}
+                setRegistrationPoints={setRegistrationPoints}
+                onRegistrationComplete={(matrix, dimensions) => {
+                  setRegistrationMatrix(matrix);
+                  setStockMode('custom');
+                  setCustomStockSize(dimensions);
+                  setArScale(1);
+                  setArRotation(0);
+                }}
+                digitalPins={digitalPins}
+                onFiducialRegistrationComplete={(physicalPoints) => {
+                  try {
+                    const matrix = calculateTriangleRegistration(digitalPins, physicalPoints);
+                    setRegistrationMatrix(matrix);
+                    setArScale(1);
+                    setArRotation(0);
+                    setIsPinningMode(false);
+                  } catch (e) {
+                    console.error(e);
+                    alert("Failed to calculate triangle alignment. Please ensure your 3 points are not in a straight line.");
+                  }
+                }}
+                arMode={arMode}
+              />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
           <group 
