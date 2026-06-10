@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import { useXRHitTest } from '@react-three/xr';
 import { Html, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
@@ -18,7 +18,7 @@ interface ARControllerProps {
   onRegistrationComplete: (matrix: THREE.Matrix4, dimensions: [number, number, number]) => void;
   digitalPins: THREE.Vector3[];
   onFiducialRegistrationComplete: (physicalPoints: THREE.Vector3[]) => void;
-  useDomOverlay: boolean;
+  arMode: 'none' | 'webxr_dom' | 'webxr_basic' | 'html5';
 }
 
 export const ARController: React.FC<ARControllerProps> = ({ 
@@ -31,7 +31,7 @@ export const ARController: React.FC<ARControllerProps> = ({
   onRegistrationComplete,
   digitalPins,
   onFiducialRegistrationComplete,
-  useDomOverlay
+  arMode
 }) => {
   const { camera } = useThree();
   const [physicalHitPoint, setPhysicalHitPoint] = useState<THREE.Vector3 | null>(null);
@@ -41,7 +41,9 @@ export const ARController: React.FC<ARControllerProps> = ({
 
   // Perform continuous hit-test against the physical environment
   useXRHitTest((results: any[], getWorldMatrix: any) => {
+    if (arMode === 'html5') return;
     if (results.length === 0) return;
+    
     const hitMatrix = getWorldMatrix(results[0]);
     const physicalPoint = new THREE.Vector3().setFromMatrixPosition(hitMatrix);
     setPhysicalHitPoint(physicalPoint);
@@ -79,7 +81,19 @@ export const ARController: React.FC<ARControllerProps> = ({
     } else {
       setDrillDepth(null);
     }
-  }, "viewer");
+  });
+
+  useFrame(() => {
+    if (arMode === 'html5' && hitMeshRef.current && camera && (!isPlaced || registrationStep !== 'idle')) {
+      // Lock the crosshair 1 meter in front of the camera
+      const targetPos = new THREE.Vector3(0, 0, -1.0);
+      targetPos.applyMatrix4(camera.matrixWorld);
+      
+      hitMeshRef.current.position.lerp(targetPos, 0.5);
+      
+      setPhysicalHitPoint(hitMeshRef.current.position.clone());
+    }
+  });
 
   if (!physicalHitPoint) return null;
 
@@ -123,7 +137,7 @@ export const ARController: React.FC<ARControllerProps> = ({
       <meshStandardMaterial color={isPlaced ? "#ef4444" : "#4ade80"} emissive={isPlaced ? "#ef4444" : "#4ade80"} emissiveIntensity={0.8} />
       
       {(!isPlaced || registrationStep !== 'idle') && (
-        useDomOverlay ? (
+        (arMode === 'webxr_dom' || arMode === 'html5') ? (
           <Html position={[0, 0.1, 0]} center zIndexRange={[100, 0]}>
             <div className="flex gap-2">
               {registrationStep === 'idle' ? (
@@ -219,7 +233,7 @@ export const ARController: React.FC<ARControllerProps> = ({
       )}
 
       {isPlaced && drillDepth !== null && registrationStep === 'idle' && (
-        useDomOverlay ? (
+        (arMode === 'webxr_dom' || arMode === 'html5') ? (
           <Html position={[0, 0.05, 0]} center zIndexRange={[100, 0]} className="pointer-events-none">
             <div className="bg-dark-900/90 border border-primary-500/50 text-primary-400 font-mono text-sm px-3 py-2 rounded shadow-lg whitespace-nowrap backdrop-blur-md">
               {drillDepth > 0 ? `Carve: ${drillDepth.toFixed(1)} mm` : `Too deep: ${Math.abs(drillDepth).toFixed(1)} mm`}

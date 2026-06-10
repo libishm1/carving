@@ -1,6 +1,6 @@
 import { useState, useMemo, Suspense, useRef, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, ContactShadows, Grid, TransformControls, Html } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Grid, TransformControls, Html, DeviceOrientationControls } from '@react-three/drei';
 import { XR, createXRStore } from '@react-three/xr';
 import { Model } from './components/ModelLoader';
 import { TweenMesh } from './components/TweenMesh';
@@ -80,7 +80,8 @@ function App() {
   const [selectedMaquetteLocalPoint, setSelectedMaquetteLocalPoint] = useState<THREE.Vector3 | null>(null);
   const [selectedBlockLocalPoint, setSelectedBlockLocalPoint] = useState<THREE.Vector3 | null>(null);
   const [drillDepth, setDrillDepth] = useState<number | null>(null);
-  const [useDomOverlay, setUseDomOverlay] = useState(true);
+  const [arMode, setArMode] = useState<'none' | 'webxr_dom' | 'webxr_basic' | 'html5'>('none');
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -292,28 +293,67 @@ function App() {
     }
   };
 
+  const startHtml5Camera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err) {
+      alert("Failed to access camera for HTML5 mode: " + err);
+      setArMode('none');
+    }
+  };
+
+  const stopHtml5Camera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
   const handleEnterAR = async () => {
     try {
       if (!navigator.xr) {
-        alert("WebXR is not available in this browser. Ensure you are using Chrome on Android and the site is loaded over HTTPS.");
+        // Fallback directly to HTML5
+        setArMode('html5');
+        startHtml5Camera();
         return;
       }
+      
       const supported = await navigator.xr.isSessionSupported('immersive-ar');
       if (!supported) {
-        alert("AR (immersive-ar) is not supported on this device/browser.");
+        console.warn("AR (immersive-ar) is not supported, falling back to HTML5 Magic Window.");
+        setArMode('html5');
+        startHtml5Camera();
         return;
       }
       
       try {
-        setUseDomOverlay(true);
+        setArMode('webxr_dom');
         await storeWithDOM.enterAR();
       } catch (domError) {
         console.warn("DOM Overlay session failed, falling back to 3D Billboards", domError);
-        setUseDomOverlay(false);
-        await storeWithoutDOM.enterAR();
+        try {
+          setArMode('webxr_basic');
+          await storeWithoutDOM.enterAR();
+        } catch (basicError) {
+          console.warn("WebXR basic session failed, falling back to HTML5", basicError);
+          setArMode('html5');
+          startHtml5Camera();
+        }
       }
     } catch (error: any) {
       alert("Failed to enter AR: " + (error.message || error));
+    }
+  };
+
+  const handleExitAR = () => {
+    if (arMode === 'html5') {
+      stopHtml5Camera();
+      setArMode('none');
     }
   };
 
@@ -407,6 +447,25 @@ function App() {
           </div>
         )}
 
+        {arMode === 'html5' && (
+          <video 
+            ref={videoRef}
+            className="absolute top-0 left-0 w-full h-full object-cover z-0"
+            playsInline
+            muted
+            autoPlay
+          />
+        )}
+        
+        {arMode !== 'none' && (
+          <button
+            onClick={handleExitAR}
+            className="absolute top-4 right-4 z-50 bg-red-600 hover:bg-red-500 text-white font-bold h-12 px-4 rounded-full shadow-lg"
+          >
+            Exit AR
+          </button>
+        )}
+
         <button
           onClick={handleEnterAR}
           className="absolute bottom-4 left-4 z-50 bg-primary-600 hover:bg-primary-500 text-white font-bold h-14 px-6 rounded-full shadow-lg flex items-center gap-2 transition-colors"
@@ -414,13 +473,22 @@ function App() {
           <BoxSelect className="w-5 h-5" />
           Enter AR
         </button>
-        <Canvas camera={{ position: [2, 2, 2], fov: 45 }} gl={{ localClippingEnabled: true }}>
-          <XR store={useDomOverlay ? storeWithDOM : storeWithoutDOM}>
+        <Canvas 
+          camera={{ position: [2, 2, 2], fov: 45 }} 
+          gl={{ localClippingEnabled: true, alpha: true }}
+          className={arMode === 'html5' ? 'z-10 bg-transparent' : ''}
+        >
+          <XR store={arMode === 'webxr_dom' ? storeWithDOM : storeWithoutDOM}>
             <ambientLight intensity={0.4} />
             <hemisphereLight intensity={0.6} color="#ffffff" groundColor="#444444" />
             <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
             <directionalLight position={[-10, 5, -10]} intensity={0.5} />
-            <OrbitControls makeDefault />
+            
+            {arMode === 'html5' ? (
+              <DeviceOrientationControls />
+            ) : (
+              <OrbitControls makeDefault />
+            )}
           
           <ARController 
             blockMeshRef={blockMeshRef} 
@@ -449,7 +517,7 @@ function App() {
                 alert("Failed to calculate triangle alignment. Please ensure your 3 points are not in a straight line.");
               }
             }}
-            useDomOverlay={useDomOverlay}
+            arMode={arMode}
           />
 
           <Grid infiniteGrid fadeDistance={20} cellColor="#3D3D3D" sectionColor="#4D4D4D" />
