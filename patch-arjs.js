@@ -21,6 +21,10 @@ try {
     'if (arContext.arToolkitContext.arController && arContext.arToolkitContext.arController.cameraParam)'
   );
 
+  // Fix React 18 Strict Mode remount crash by removing destructive deletes
+  code = code.replace('delete arContext.arToolkitContext;', '');
+  code = code.replace('delete arContext.arToolkitSource;', '');
+
   fs.writeFileSync(file, code);
   console.log('Successfully patched @artcom/react-three-arjs unmount bug!');
 } catch (e) {
