@@ -142,7 +142,7 @@ export const ARController: React.FC<ARControllerProps> = ({
 
   return (
     <>
-      {arMode !== 'html5' && (
+      {(arMode === 'webxr_dom' || arMode === 'webxr_basic') && (
         <WebXRHitTester 
           camera={camera} 
           hitMeshRef={hitMeshRef} 
